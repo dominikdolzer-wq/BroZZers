@@ -211,12 +211,12 @@
     nav.tabs {
       position: fixed; left: 50%; transform: translateX(-50%); width: min(480px, 100%);
       bottom: 0; height: calc(var(--nav-h) + var(--safe-b)); padding: 8px 2px var(--safe-b);
-      display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px;
+      display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px;
       background: rgba(15, 15, 18, 0.94); border-top: 1px solid var(--line); backdrop-filter: blur(16px); z-index: 10;
     }
     .tab {
       border: 0; background: transparent; color: var(--muted); border-radius: 14px;
-      font-size: 0.56rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      font-size: 0.5rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
     }
     .tab .ico { font-size: 1.2rem; }
     .tab.on { color: var(--gold); background: rgba(232, 196, 120, 0.1); }
@@ -319,6 +319,18 @@
       justify-content: space-between;
       gap: 10px;
     }
+    .event-card { padding: 18px; margin-bottom: 12px; }
+    .event-year {
+      color: var(--gold);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+    .event-date { font-size: 1.18rem; font-weight: 800; margin: 8px 0 6px; line-height: 1.25; }
+    .event-place { color: var(--gold-2); font-size: 1.02rem; }
+    .event-card.next { border-color: rgba(232, 196, 120, 0.45); background: linear-gradient(135deg, rgba(232,196,120,0.16), rgba(217,146,59,0.06)); }
+    .event-card.past { opacity: 0.78; }
   </style>
 </head>
 <body class="locked">
@@ -384,6 +396,10 @@
       <div class="photo-grid" id="photoGrid"></div>
     </section>
 
+    <section id="panel-events" class="panel" hidden>
+      <div id="eventList"></div>
+    </section>
+
     <section id="panel-beer" class="panel" hidden>
       <div id="beerKing"></div>
       <div id="beerRanks"></div>
@@ -423,6 +439,7 @@
         <button class="chip on" type="button" data-admin-section="members">Mitglieder</button>
         <button class="chip" type="button" data-admin-section="drinks">Getränke</button>
         <button class="chip" type="button" data-admin-section="fines">Strafen</button>
+        <button class="chip" type="button" data-admin-section="events">Events</button>
         <button class="chip" type="button" data-admin-section="extras">Sonderzahlungen</button>
         <button class="chip wide" type="button" data-admin-section="misc">Diverses</button>
       </nav>
@@ -443,21 +460,33 @@
           <h2 class="section-title">Getränkearten</h2>
           <div class="form-grid">
             <input id="drinkName" type="text" placeholder="z. B. Helles" maxlength="24" />
-            <div class="price-row">
-              <div class="field">
-                <label for="drinkBuy">Einkaufspreis €</label>
-                <input id="drinkBuy" type="number" min="0" step="0.01" inputmode="decimal" placeholder="3,80" />
-              </div>
-              <div class="field">
-                <label for="drinkShare">Kassenanteil €</label>
-                <input id="drinkShare" type="number" min="0" step="0.01" inputmode="decimal" placeholder="2,00" />
-              </div>
+            <div class="field">
+              <label for="drinkPrice">Preis €</label>
+              <input id="drinkPrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="3,80" />
             </div>
             <label class="check"><input id="drinkKing" type="checkbox" checked /> Zählt für den Bierkönig</label>
             <button class="primary" type="button" id="saveDrink">Getränk speichern</button>
             <button class="primary ghosted" type="button" id="cancelDrink" hidden>Abbrechen</button>
           </div>
           <div id="drinkAdmin" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <div class="admin-sub" data-admin-panel="events" hidden>
+        <div class="admin-block">
+          <h2 class="section-title">Jahres-Events</h2>
+          <p class="member-meta" style="margin-bottom:10px">Ein Event pro Jahr, mit Datum und Standort. Alle sehen es unter Events.</p>
+          <div class="form-grid">
+            <input id="eventTitle" type="text" placeholder="Name, z. B. Jahresausflug" maxlength="40" />
+            <div class="field">
+              <label for="eventDate">Datum</label>
+              <input id="eventDate" type="date" />
+            </div>
+            <input id="eventPlace" type="text" placeholder="Standort / Ort" maxlength="48" />
+            <button class="primary" type="button" id="saveEventDef">Event speichern</button>
+            <button class="primary ghosted" type="button" id="cancelEventDef" hidden>Abbrechen</button>
+          </div>
+          <div id="eventAdmin" style="margin-top:12px"></div>
         </div>
       </div>
 
@@ -553,6 +582,7 @@
     <button class="tab on" data-tab="drinks"><span class="ico">🍺</span>Getränke</button>
     <button class="tab" data-tab="fines"><span class="ico">⚖️</span>Abend</button>
     <button class="tab" data-tab="photos"><span class="ico">📷</span>Fotos</button>
+    <button class="tab" data-tab="events"><span class="ico">📅</span>Events</button>
     <button class="tab" data-tab="beer"><span class="ico">👑</span>König</button>
     <button class="tab" data-tab="stats"><span class="ico">💶</span>Konto</button>
     <button class="tab" data-tab="admin"><span class="ico">⚙️</span>Verwalten</button>
@@ -569,6 +599,7 @@
       drinks: ["Getränke", "Zähler für den gewählten Stammtisch-Abend."],
       fines: ["Abendkonto", "Strafen, Geburtstag und Tischspiele."],
       photos: ["Fotos", "Bilder zum gewählten Stammtisch aus dem Handy speichern."],
+      events: ["Events", "Ein Termin pro Jahr, für alle sichtbar."],
       beer: ["Bier-Wertung", "Über alle Monate des Jahres."],
       stats: ["Monatskonto", "Was jeder bis zum nächsten Stammtisch überweist."],
       admin: ["Verwaltung", "Bereich wählen und Kataloge pflegen."]
@@ -580,7 +611,7 @@
 
     let state = defaultState();
     let selectedMemberId = null;
-    let editing = { drink: null, fine: null, extra: null, game: null };
+    let editing = { drink: null, fine: null, extra: null, game: null, event: null };
     let openYears = new Set([String(new Date().getFullYear())]);
     let cloudStatus = "wait";
     let cloudNote = "Verbinde mit der Cloud…";
@@ -697,12 +728,31 @@
       const [y, m] = monthKey(date).split("-").map(Number);
       return monthFmt.format(new Date(y, m - 1, 1));
     }
+    const dayFmt = new Intl.DateTimeFormat("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    function dayLabel(date) {
+      const [y, m, d] = String(date).split("-").map(Number);
+      if (!y || !m || !d) return String(date || "");
+      return dayFmt.format(new Date(y, m - 1, d));
+    }
 
+    function drinkPrice(drink) {
+      if (!drink) return 0;
+      if (drink.price != null && Number.isFinite(Number(drink.price))) return Number(drink.price);
+      return (Number(drink.buy) || 0) + (Number(drink.share) || 0);
+    }
+    function normalizeDrink(drink) {
+      return {
+        id: drink.id || uid(),
+        name: drink.name,
+        price: drinkPrice(drink),
+        forKing: !!drink.forKing
+      };
+    }
     function defaultDrinks() {
       return [
-        { id: uid(), name: "Helles", buy: 3.8, share: 2, forKing: true },
-        { id: uid(), name: "Weißbier", buy: 4.2, share: 2, forKing: true },
-        { id: uid(), name: "Schnaps", buy: 1.5, share: 1, forKing: false }
+        { id: uid(), name: "Helles", price: 3.8, forKing: true },
+        { id: uid(), name: "Weißbier", price: 4.2, forKing: true },
+        { id: uid(), name: "Schnaps", price: 1.5, forKing: false }
       ];
     }
     function defaultCatalog() {
@@ -758,6 +808,7 @@
         catalog: defaultCatalog(),
         extras: defaultExtras(),
         games: defaultGames(),
+        events: [],
         sessions: [session],
         currentSessionId: session.id
       };
@@ -767,6 +818,8 @@
       if (raw.sessions && raw.members) {
         raw.extras = raw.extras || defaultExtras();
         raw.games = raw.games || defaultGames();
+        raw.events = Array.isArray(raw.events) ? raw.events : [];
+        raw.drinks = (raw.drinks || []).map(normalizeDrink);
         raw.sessions.forEach((s) => {
           s.photos = Array.isArray(s.photos) ? s.photos : [];
           s.entries.forEach((e) => {
@@ -781,7 +834,7 @@
         if (raw.accessHash) raw.accessHash = String(raw.accessHash);
         return raw;
       }
-      const drinks = raw.drinks?.length ? raw.drinks : defaultDrinks();
+      const drinks = (raw.drinks?.length ? raw.drinks : defaultDrinks()).map(normalizeDrink);
       const members = (raw.members || []).map((m) => ({ id: m.id || uid(), name: m.name }));
       const session = newSession(todayISO(), members, drinks);
       session.entries.forEach((e) => {
@@ -795,6 +848,7 @@
         catalog: raw.catalog || defaultCatalog(),
         extras: defaultExtras(),
         games: defaultGames(),
+        events: Array.isArray(raw.events) ? raw.events : [],
         sessions: [session],
         currentSessionId: session.id
       };
@@ -1070,12 +1124,8 @@
     function beerCount(entry) {
       return state.drinks.reduce((sum, d) => sum + (d.forKing ? drinkCountOf(entry, d.id) : 0), 0);
     }
-    function unitPrice(drink) { return drink.buy + drink.share; }
     function drinksEuro(entry) {
-      return state.drinks.reduce((sum, d) => sum + drinkCountOf(entry, d.id) * unitPrice(d), 0);
-    }
-    function tillShare(entry) {
-      return state.drinks.reduce((sum, d) => sum + drinkCountOf(entry, d.id) * d.share, 0);
+      return state.drinks.reduce((sum, d) => sum + drinkCountOf(entry, d.id) * drinkPrice(d), 0);
     }
     function listSum(list) { return (list || []).reduce((sum, item) => sum + item.amount, 0); }
     function gamesEuro(entry) {
@@ -1163,12 +1213,15 @@
           if (!name) return;
           const payload = {
             name,
-            buy: parseMoney(document.getElementById("drinkBuy").value),
-            share: parseMoney(document.getElementById("drinkShare").value),
+            price: parseMoney(document.getElementById("drinkPrice").value),
             forKing: document.getElementById("drinkKing").checked
           };
-          if (editing.drink) Object.assign(drinkById(editing.drink), payload);
-          else {
+          if (editing.drink) {
+            const drink = drinkById(editing.drink);
+            Object.assign(drink, payload);
+            delete drink.buy;
+            delete drink.share;
+          } else {
             const drink = { id: uid(), ...payload };
             state.drinks.push(drink);
             state.sessions.forEach((s) => s.entries.forEach((e) => { if (e.drinks[drink.id] == null) e.drinks[drink.id] = 0; }));
@@ -1198,6 +1251,24 @@
           if (editing.game) Object.assign(gameById(editing.game), { name, amount });
           else state.games.push({ id: uid(), name, amount });
           resetGameForm();
+        }},
+        event: { save: () => {
+          const title = document.getElementById("eventTitle").value.trim();
+          const date = document.getElementById("eventDate").value;
+          const place = document.getElementById("eventPlace").value.trim();
+          if (!date || !place) return;
+          const year = Number(date.slice(0, 4));
+          const payload = { title: title || "Jahres-Event", date, place, year };
+          state.events = state.events || [];
+          if (editing.event) {
+            const current = state.events.find((e) => e.id === editing.event);
+            if (current) Object.assign(current, payload);
+          } else {
+            const sameYear = state.events.find((e) => e.year === year);
+            if (sameYear) Object.assign(sameYear, payload);
+            else state.events.push({ id: uid(), ...payload });
+          }
+          resetEventForm();
         }}
       };
       map[kind].save();
@@ -1207,8 +1278,7 @@
     function resetDrinkForm() {
       editing.drink = null;
       document.getElementById("drinkName").value = "";
-      document.getElementById("drinkBuy").value = "";
-      document.getElementById("drinkShare").value = "";
+      document.getElementById("drinkPrice").value = "";
       document.getElementById("drinkKing").checked = true;
       document.getElementById("saveDrink").textContent = "Getränk speichern";
       document.getElementById("cancelDrink").hidden = true;
@@ -1233,6 +1303,14 @@
       document.getElementById("gameAmount").value = "";
       document.getElementById("saveGameDef").textContent = "Spiel speichern";
       document.getElementById("cancelGameDef").hidden = true;
+    }
+    function resetEventForm() {
+      editing.event = null;
+      document.getElementById("eventTitle").value = "";
+      document.getElementById("eventDate").value = "";
+      document.getElementById("eventPlace").value = "";
+      document.getElementById("saveEventDef").textContent = "Event speichern";
+      document.getElementById("cancelEventDef").hidden = true;
     }
 
     function startOrOpenSession() {
@@ -1433,11 +1511,11 @@
               <div class="name-wrap">
                 <div class="member-name">${escapeHtml(m.name)}</div>
                 <div class="member-meta">${escapeHtml(summary)}</div>
-                <div class="member-meta">Getränke ${euro.format(b.drinks)} · davon Kasse ${euro.format(tillShare(e))}</div>
+                <div class="member-meta">Getränke ${euro.format(b.drinks)}</div>
               </div>
             </div>
             <div class="counters">
-              ${state.drinks.map((d) => counterHtml(m.id, d.id, d.name, drinkCountOf(e, d.id), `${euro.format(unitPrice(d))} (davon ${euro.format(d.share)} Kasse)`, "bump")).join("")}
+              ${state.drinks.map((d) => counterHtml(m.id, d.id, d.name, drinkCountOf(e, d.id), euro.format(drinkPrice(d)), "bump")).join("")}
             </div>
           </article>
         `;
@@ -1521,6 +1599,32 @@
           </div>
         </div>
       `;
+    }
+
+    function sortedEvents() {
+      return [...(state.events || [])].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    }
+    function renderEvents() {
+      const list = document.getElementById("eventList");
+      const events = sortedEvents();
+      if (!events.length) {
+        list.innerHTML = `<p class="empty">Noch kein Event. Unter Verwalten → Events Datum und Standort eintragen.</p>`;
+        return;
+      }
+      const today = todayISO();
+      const next = [...events].filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
+      list.innerHTML = events.map((event) => {
+        const past = event.date < today;
+        const isNext = next && event.id === next.id;
+        return `
+          <article class="member-card event-card ${isNext ? "next" : ""} ${past ? "past" : ""}">
+            <div class="event-year">${event.year}${isNext ? " · als nächstes" : past ? " · vorbei" : ""}</div>
+            ${event.title ? `<div class="member-name" style="margin-top:8px">${escapeHtml(event.title)}</div>` : ""}
+            <div class="event-date">${escapeHtml(dayLabel(event.date))}</div>
+            <div class="event-place">${escapeHtml(event.place)}</div>
+          </article>
+        `;
+      }).join("");
     }
 
     function renderBeer() {
@@ -1716,7 +1820,7 @@
             <div class="admin-card admin-row">
               <div>
                 <div class="member-name">${escapeHtml(d.name)}</div>
-                <div class="member-meta">Einkauf ${euro.format(d.buy)} · Kasse +${euro.format(d.share)}${d.forKing ? " · Bierkönig" : ""}</div>
+                <div class="member-meta">${euro.format(drinkPrice(d))}${d.forKing ? " · Bierkönig" : ""}</div>
               </div>
               <div class="admin-actions">
                 <button class="tiny" type="button" data-edit-drink="${d.id}">Ändern</button>
@@ -1729,6 +1833,24 @@
       document.getElementById("fineAdmin").innerHTML = catalogList(state.catalog, "label", "amount", "edit-fine", "remove-fine-def");
       document.getElementById("extraAdmin").innerHTML = catalogList(state.extras, "label", "amount", "edit-extra", "remove-extra-def");
       document.getElementById("gameAdmin").innerHTML = catalogList(state.games, "name", "amount", "edit-game", "remove-game-def", () => " je Runde");
+      const eventAdmin = document.getElementById("eventAdmin");
+      if (eventAdmin) {
+        const events = sortedEvents();
+        eventAdmin.innerHTML = events.length
+          ? events.map((event) => `
+              <div class="admin-card admin-row">
+                <div>
+                  <div class="member-name">${escapeHtml(event.title || "Event")} · ${event.year}</div>
+                  <div class="member-meta">${escapeHtml(dayLabel(event.date))} · ${escapeHtml(event.place)}</div>
+                </div>
+                <div class="admin-actions">
+                  <button class="tiny" type="button" data-edit-event="${event.id}">Ändern</button>
+                  <button class="tiny danger" type="button" data-remove-event="${event.id}">Löschen</button>
+                </div>
+              </div>
+            `).join("")
+          : `<p class="empty">Noch kein Event.</p>`;
+      }
       const gateInfo = document.getElementById("gateInfo");
       if (gateInfo) {
         gateInfo.innerHTML = state.accessHash
@@ -1792,6 +1914,7 @@
       renderDrinks();
       renderFines();
       renderPhotos();
+      renderEvents();
       renderBeer();
       renderStats();
       renderAdmin();
@@ -1815,6 +1938,7 @@
         });
         document.getElementById("title").textContent = titles[key][0];
         document.getElementById("subtitle").textContent = titles[key][1];
+        document.getElementById("sessionSelect").hidden = key === "events";
         return;
       }
       const adminBtn = event.target.closest("[data-admin-section]");
@@ -1886,13 +2010,14 @@
       if (event.target.closest("#cancelExtraDef")) { resetExtraForm(); return; }
       if (event.target.closest("#saveGameDef")) { saveNamed("game"); return; }
       if (event.target.closest("#cancelGameDef")) { resetGameForm(); return; }
+      if (event.target.closest("#saveEventDef")) { saveNamed("event"); return; }
+      if (event.target.closest("#cancelEventDef")) { resetEventForm(); return; }
       const editDrink = event.target.closest("[data-edit-drink]");
       if (editDrink) {
         const d = drinkById(editDrink.dataset.editDrink);
         editing.drink = d.id;
         document.getElementById("drinkName").value = d.name;
-        document.getElementById("drinkBuy").value = String(d.buy);
-        document.getElementById("drinkShare").value = String(d.share);
+        document.getElementById("drinkPrice").value = String(drinkPrice(d));
         document.getElementById("drinkKing").checked = d.forKing;
         document.getElementById("saveDrink").textContent = "Änderung speichern";
         document.getElementById("cancelDrink").hidden = false;
@@ -1946,6 +2071,23 @@
       const removeGame = event.target.closest("[data-remove-game-def]");
       if (removeGame && confirm("Tischspiel löschen?")) {
         state.games = state.games.filter((g) => g.id !== removeGame.dataset.removeGameDef);
+        save(); render(); return;
+      }
+      const editEvent = event.target.closest("[data-edit-event]");
+      if (editEvent) {
+        const item = (state.events || []).find((e) => e.id === editEvent.dataset.editEvent);
+        if (!item) return;
+        editing.event = item.id;
+        document.getElementById("eventTitle").value = item.title || "";
+        document.getElementById("eventDate").value = item.date || "";
+        document.getElementById("eventPlace").value = item.place || "";
+        document.getElementById("saveEventDef").textContent = "Änderung speichern";
+        document.getElementById("cancelEventDef").hidden = false;
+        return;
+      }
+      const removeEvent = event.target.closest("[data-remove-event]");
+      if (removeEvent && confirm("Event löschen?")) {
+        state.events = (state.events || []).filter((e) => e.id !== removeEvent.dataset.removeEvent);
         save(); render(); return;
       }
       const removeMemberBtn = event.target.closest("[data-remove-member]");
