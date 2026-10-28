@@ -98,6 +98,7 @@
     .step:active { transform: scale(0.96); }
     .add-row, .form-grid { display: grid; gap: 8px; }
     .form-grid[hidden] { display: none !important; }
+    #gateLogin:not([hidden]), #gateSetup:not([hidden]) { display: grid !important; }
     .add-row.inline { grid-template-columns: 1fr auto; }
     input, select {
       width: 100%; min-height: 54px; border-radius: 16px; border: 1px solid var(--line);
@@ -311,7 +312,18 @@
       gap: 14px;
     }
     .gate[hidden] { display: none !important; }
-    .gate h1 { font-size: 2rem; }
+    .gate h1 { font-size: 2rem; text-align: center; }
+    .gate .sub { text-align: center; }
+    .brand-logo {
+      display: block;
+      width: min(100%, 340px);
+      height: auto;
+      margin: 0 auto 8px;
+    }
+    .header-logo {
+      width: min(240px, 72%);
+      margin: 0 0 10px;
+    }
     .pin-error { color: var(--danger); min-height: 1.2em; font-size: 0.9rem; }
     .header-row {
       display: flex;
@@ -356,10 +368,10 @@
 </head>
 <body class="locked">
   <div id="gate" class="gate">
-    <p class="kicker">BroZZers</p>
+    <img class="brand-logo" src="./logo.png" alt="BroZZers" />
     <h1 id="gateTitle">Nur für Mitglieder</h1>
     <p class="sub" id="gateSub">Daten und Fotos sind verschlüsselt. Ohne Passwort kann niemand sie lesen.</p>
-    <div id="gateLogin" class="form-grid" hidden>
+    <div id="gateLogin" class="form-grid">
       <div class="field">
         <label for="gatePin">Passwort</label>
         <input id="gatePin" type="password" maxlength="64" autocomplete="current-password" placeholder="Gemeinsames Passwort" />
@@ -382,13 +394,14 @@
   </div>
 
   <header class="app-header">
+    <img class="brand-logo header-logo" src="./logo.png" alt="BroZZers" />
     <div class="header-row">
       <p class="kicker">Stammtisch <span id="syncBadge" class="sync-badge">Cloud…</span></p>
       <button class="tiny" type="button" id="lockApp">Sperren</button>
     </div>
-    <h1 id="title">Getränke</h1>
-    <p class="sub" id="subtitle">Zähler für den gewählten Stammtisch-Abend.</p>
-    <select id="sessionSelect" aria-label="Stammtisch-Monat" style="margin-top:12px"></select>
+    <h1 id="title">Events</h1>
+    <p class="sub" id="subtitle">Termine mit Datum und Standort, für alle sichtbar.</p>
+    <select id="sessionSelect" aria-label="Stammtisch-Monat" style="margin-top:12px" hidden></select>
     <div class="music-bar">
       <div class="yt" id="ytHost"></div>
       <div class="music-meta">
@@ -400,7 +413,7 @@
   </header>
 
   <main>
-    <section id="panel-drinks" class="panel active">
+    <section id="panel-drinks" class="panel" hidden>
       <div id="sessionHint"></div>
       <div id="drinkList"></div>
     </section>
@@ -426,7 +439,7 @@
       <div class="photo-grid" id="photoGrid"></div>
     </section>
 
-    <section id="panel-events" class="panel" hidden>
+    <section id="panel-events" class="panel active">
       <div id="eventList"></div>
     </section>
 
@@ -615,10 +628,10 @@
   </main>
 
   <nav class="tabs" aria-label="Bereiche">
-    <button class="tab on" data-tab="drinks"><span class="ico">🍺</span>Getränke</button>
+    <button class="tab" data-tab="drinks"><span class="ico">🍺</span>Getränke</button>
     <button class="tab" data-tab="fines"><span class="ico">⚖️</span>Abend</button>
     <button class="tab" data-tab="photos"><span class="ico">📷</span>Fotos</button>
-    <button class="tab" data-tab="events"><span class="ico">📅</span>Events</button>
+    <button class="tab on" data-tab="events"><span class="ico">📅</span>Events</button>
     <button class="tab" data-tab="beer"><span class="ico">👑</span>König</button>
     <button class="tab" data-tab="stats"><span class="ico">💶</span>Konto</button>
     <button class="tab" data-tab="admin"><span class="ico">⚙️</span>Verwalten</button>
@@ -812,6 +825,18 @@
         ? "Ohne dieses Passwort bleiben Fotos und Daten unlesbar."
         : "Daten und Fotos sind verschlüsselt. Ohne Passwort kann niemand sie lesen.";
     }
+    function showTab(key) {
+      if (!titles[key]) key = "events";
+      document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("on", el.dataset.tab === key));
+      document.querySelectorAll(".panel").forEach((el) => {
+        const on = el.id === `panel-${key}`;
+        el.classList.toggle("active", on);
+        el.hidden = !on;
+      });
+      document.getElementById("title").textContent = titles[key][0];
+      document.getElementById("subtitle").textContent = titles[key][1];
+      document.getElementById("sessionSelect").hidden = key === "events";
+    }
     function wipePlainStorage() {
       try {
         localStorage.removeItem(STORAGE_KEY);
@@ -826,6 +851,7 @@
       setUnlocked(true);
       persistLocal();
       render();
+      showTab("events");
       loadMusicApi();
       playMusic();
     }
@@ -847,7 +873,19 @@
     async function unlockAccess() {
       if (gateFails >= 8) { showGateError("Zu viele Fehlversuche. Kurz warten, dann neu laden."); return; }
       const pin = document.getElementById("gatePin").value;
-      if (!queuedVault) { paintGate("setup"); return; }
+      if (!queuedVault) {
+        showGateError("Cloud wird geladen…");
+        try {
+          const remote = await pullCloud();
+          if (isVault(remote)) queuedVault = remote;
+        } catch (_) {}
+        if (!queuedVault) {
+          paintGate("login");
+          showGateError("Verschlüsselte Daten noch nicht geladen. Bitte Seite neu laden.");
+          return;
+        }
+        showGateError("");
+      }
       if (!pin) { showGateError("Passwort eingeben."); return; }
       try {
         const obj = await decryptVault(queuedVault, pin);
@@ -1156,14 +1194,7 @@
     }
 
     async function pullCloud() {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 10000);
-      let res;
-      try {
-        res = await fetch(CLOUD_URL + "?t=" + Date.now(), { cache: "no-store", signal: ac.signal });
-      } finally {
-        clearTimeout(timer);
-      }
+      const res = await fetch(CLOUD_URL + "?t=" + Date.now(), { cache: "no-store" });
       const text = await res.text();
       if (!res.ok) throw new Error(cloudErrorMessage(res, text, "Lesen"));
       const doc = text ? JSON.parse(text) : null;
@@ -1286,21 +1317,20 @@
         const local = load();
         if (remoteLooksValid(local)) queuedPlain = local;
       } catch (_) {}
-      if (queuedVault) paintGate("login");
-      else paintGate("setup");
+      paintGate("login");
       setUnlocked(false);
       try {
         const remote = await pullCloud();
         if (isVault(remote)) queuedVault = remote;
         else if (remoteLooksValid(remote)) queuedPlain = migrate(remote);
         setCloudStatus("ok", isVault(remote) ? "Verschlüsselte Cloud bereit." : "Cloud bereit – Passwort festlegen.");
+        if (isVault(remote) || queuedVault) paintGate("login");
+        else paintGate("setup");
       } catch (err) {
         lastCloudFailAt = Date.now();
-        const msg = err && err.name === "AbortError" ? "Cloud antwortet zu langsam." : (err && err.message ? err.message : "");
-        setCloudStatus("err", "Cloud nicht erreichbar. " + msg);
+        setCloudStatus("err", "Cloud nicht erreichbar. " + (err && err.message ? err.message : ""));
+        paintGate("login");
       }
-      if (queuedVault) paintGate("login");
-      else paintGate("setup");
       loadMusicApi();
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) syncCloud();
@@ -2217,16 +2247,7 @@
     document.body.addEventListener("click", (event) => {
       const tab = event.target.closest(".tab");
       if (tab) {
-        const key = tab.dataset.tab;
-        document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("on", el === tab));
-        document.querySelectorAll(".panel").forEach((el) => {
-          const on = el.id === `panel-${key}`;
-          el.classList.toggle("active", on);
-          el.hidden = !on;
-        });
-        document.getElementById("title").textContent = titles[key][0];
-        document.getElementById("subtitle").textContent = titles[key][1];
-        document.getElementById("sessionSelect").hidden = key === "events";
+        showTab(tab.dataset.tab);
         return;
       }
       const adminBtn = event.target.closest("[data-admin-section]");

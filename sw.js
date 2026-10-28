@@ -1,8 +1,9 @@
-const CACHE = "stammtisch-pwa-v13";
+const CACHE = "stammtisch-pwa-v14";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
+  "./logo.png",
   "./icon.svg",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
