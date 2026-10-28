@@ -474,8 +474,8 @@
 
       <div class="admin-sub" data-admin-panel="events" hidden>
         <div class="admin-block">
-          <h2 class="section-title">Jahres-Events</h2>
-          <p class="member-meta" style="margin-bottom:10px">Ein Event pro Jahr, mit Datum und Standort. Alle sehen es unter Events.</p>
+          <h2 class="section-title">Events</h2>
+          <p class="member-meta" style="margin-bottom:10px">Beliebig viele Termine, jeweils mit Datum und Standort. Alle sehen sie unter Events.</p>
           <div class="form-grid">
             <input id="eventTitle" type="text" placeholder="Name, z. B. Jahresausflug" maxlength="40" />
             <div class="field">
@@ -599,7 +599,7 @@
       drinks: ["Getränke", "Zähler für den gewählten Stammtisch-Abend."],
       fines: ["Abendkonto", "Strafen, Geburtstag und Tischspiele."],
       photos: ["Fotos", "Bilder zum gewählten Stammtisch aus dem Handy speichern."],
-      events: ["Events", "Ein Termin pro Jahr, für alle sichtbar."],
+      events: ["Events", "Termine mit Datum und Standort, für alle sichtbar."],
       beer: ["Bier-Wertung", "Über alle Monate des Jahres."],
       stats: ["Monatskonto", "Was jeder bis zum nächsten Stammtisch überweist."],
       admin: ["Verwaltung", "Bereich wählen und Kataloge pflegen."]
@@ -1258,15 +1258,13 @@
           const place = document.getElementById("eventPlace").value.trim();
           if (!date || !place) return;
           const year = Number(date.slice(0, 4));
-          const payload = { title: title || "Jahres-Event", date, place, year };
+          const payload = { title: title || "Event", date, place, year };
           state.events = state.events || [];
           if (editing.event) {
             const current = state.events.find((e) => e.id === editing.event);
             if (current) Object.assign(current, payload);
           } else {
-            const sameYear = state.events.find((e) => e.year === year);
-            if (sameYear) Object.assign(sameYear, payload);
-            else state.events.push({ id: uid(), ...payload });
+            state.events.push({ id: uid(), ...payload });
           }
           resetEventForm();
         }}
@@ -1613,16 +1611,24 @@
       }
       const today = todayISO();
       const next = [...events].filter((e) => e.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
-      list.innerHTML = events.map((event) => {
-        const past = event.date < today;
-        const isNext = next && event.id === next.id;
+      const byYear = {};
+      events.forEach((event) => { (byYear[event.year] ||= []).push(event); });
+      list.innerHTML = Object.keys(byYear).sort((a, b) => Number(b) - Number(a)).map((year) => {
+        const items = byYear[year].slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
         return `
-          <article class="member-card event-card ${isNext ? "next" : ""} ${past ? "past" : ""}">
-            <div class="event-year">${event.year}${isNext ? " · als nächstes" : past ? " · vorbei" : ""}</div>
-            ${event.title ? `<div class="member-name" style="margin-top:8px">${escapeHtml(event.title)}</div>` : ""}
-            <div class="event-date">${escapeHtml(dayLabel(event.date))}</div>
-            <div class="event-place">${escapeHtml(event.place)}</div>
-          </article>
+          <h2 class="section-title">${year}</h2>
+          ${items.map((event) => {
+            const past = event.date < today;
+            const isNext = next && event.id === next.id;
+            return `
+              <article class="member-card event-card ${isNext ? "next" : ""} ${past ? "past" : ""}">
+                <div class="event-year">${isNext ? "als nächstes" : past ? "vorbei" : "geplant"}</div>
+                ${event.title ? `<div class="member-name" style="margin-top:8px">${escapeHtml(event.title)}</div>` : ""}
+                <div class="event-date">${escapeHtml(dayLabel(event.date))}</div>
+                <div class="event-place">${escapeHtml(event.place)}</div>
+              </article>
+            `;
+          }).join("")}
         `;
       }).join("");
     }
