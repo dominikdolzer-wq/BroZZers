@@ -399,7 +399,6 @@
           if (ev) ev.preventDefault();
           var btn = document.getElementById("unlockBtn");
           var err = document.getElementById("gateError");
-          if (btn) { btn.disabled = true; btn.textContent = "Bitte warten…"; }
           if (typeof window.unlockAccess === "function") {
             window.unlockAccess();
             return;
