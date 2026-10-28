@@ -115,6 +115,20 @@
     .primary.ok { background: linear-gradient(160deg, #a8d48f, #6ea85a); color: #10200c; }
     .section-title { margin: 8px 0 12px; font-size: 1.05rem; }
     .admin-block { margin-bottom: 28px; }
+    .admin-nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .admin-nav .chip {
+      min-height: 52px;
+      width: 100%;
+      justify-content: center;
+      text-align: center;
+    }
+    .admin-nav .chip.wide { grid-column: 1 / -1; }
+    .admin-sub[hidden] { display: none !important; }
     .who { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; -webkit-overflow-scrolling: touch; }
     .chip { flex: 0 0 auto; background: var(--bg-soft); color: var(--text); border: 1px solid var(--line); font-weight: 700; padding: 0 16px; }
     .chip.on { background: linear-gradient(160deg, var(--gold), var(--amber)); color: #1a1308; border-color: transparent; }
@@ -277,94 +291,111 @@
     </section>
 
     <section id="panel-admin" class="panel" hidden>
-      <div class="admin-block">
-        <h2 class="section-title">Gemeinsame Cloud</h2>
-        <p class="member-meta" style="margin-bottom:10px">Alle Geräte lesen und schreiben denselben Live-Stand. Lokal dient nur noch als Offline-Puffer.</p>
-        <div class="banner" id="cloudInfo">Verbinde…</div>
-      </div>
-      <div class="admin-block">
-        <h2 class="section-title">Monatlicher Stammtisch</h2>
-        <p class="member-meta" style="margin-bottom:10px">Ein Abend pro Monat. Vergangene Monate 2026 kannst du rückwirkend anlegen: Datum wählen, anlegen, dann Getränke und Beträge eintragen. Der aktuelle Monat bleibt dabei offen.</p>
-        <div class="form-grid">
-          <div class="field">
-            <label for="sessionDate">Datum des Abends</label>
-            <input id="sessionDate" type="date" />
+      <nav class="admin-nav" aria-label="Verwaltung">
+        <button class="chip on" type="button" data-admin-section="members">Mitglieder</button>
+        <button class="chip" type="button" data-admin-section="drinks">Getränke</button>
+        <button class="chip" type="button" data-admin-section="fines">Strafen</button>
+        <button class="chip" type="button" data-admin-section="extras">Sonderzahlungen</button>
+        <button class="chip wide" type="button" data-admin-section="misc">Diverses</button>
+      </nav>
+
+      <div class="admin-sub" data-admin-panel="members">
+        <div class="admin-block">
+          <h2 class="section-title">Mitglieder</h2>
+          <div class="add-row inline">
+            <input id="newMember" type="text" placeholder="Vorname…" maxlength="24" />
+            <button type="button" id="addMember">Hinzu</button>
           </div>
-          <button class="primary" type="button" id="startSession">Monat anlegen oder öffnen</button>
+          <div id="memberAdmin" style="margin-top:12px"></div>
         </div>
-        <div id="sessionAdmin" style="margin-top:12px"></div>
       </div>
 
-      <div class="admin-block">
-        <h2 class="section-title">Mitglieder</h2>
-        <div class="add-row inline">
-          <input id="newMember" type="text" placeholder="Vorname…" maxlength="24" />
-          <button type="button" id="addMember">Hinzu</button>
-        </div>
-        <div id="memberAdmin" style="margin-top:12px"></div>
-      </div>
-
-      <div class="admin-block">
-        <h2 class="section-title">Getränkearten</h2>
-        <div class="form-grid">
-          <input id="drinkName" type="text" placeholder="z. B. Helles" maxlength="24" />
-          <div class="price-row">
-            <div class="field">
-              <label for="drinkBuy">Einkaufspreis €</label>
-              <input id="drinkBuy" type="number" min="0" step="0.01" inputmode="decimal" placeholder="3,80" />
+      <div class="admin-sub" data-admin-panel="drinks" hidden>
+        <div class="admin-block">
+          <h2 class="section-title">Getränkearten</h2>
+          <div class="form-grid">
+            <input id="drinkName" type="text" placeholder="z. B. Helles" maxlength="24" />
+            <div class="price-row">
+              <div class="field">
+                <label for="drinkBuy">Einkaufspreis €</label>
+                <input id="drinkBuy" type="number" min="0" step="0.01" inputmode="decimal" placeholder="3,80" />
+              </div>
+              <div class="field">
+                <label for="drinkShare">Kassenanteil €</label>
+                <input id="drinkShare" type="number" min="0" step="0.01" inputmode="decimal" placeholder="2,00" />
+              </div>
             </div>
+            <label class="check"><input id="drinkKing" type="checkbox" checked /> Zählt für den Bierkönig</label>
+            <button class="primary" type="button" id="saveDrink">Getränk speichern</button>
+            <button class="primary ghosted" type="button" id="cancelDrink" hidden>Abbrechen</button>
+          </div>
+          <div id="drinkAdmin" style="margin-top:12px"></div>
+        </div>
+      </div>
+
+      <div class="admin-sub" data-admin-panel="fines" hidden>
+        <div class="admin-block">
+          <h2 class="section-title">Strafenkatalog</h2>
+          <div class="form-grid">
+            <input id="fineName" type="text" placeholder="z. B. Zu spät" maxlength="32" />
             <div class="field">
-              <label for="drinkShare">Kassenanteil €</label>
-              <input id="drinkShare" type="number" min="0" step="0.01" inputmode="decimal" placeholder="2,00" />
+              <label for="fineAmount">Betrag €</label>
+              <input id="fineAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="2,00" />
             </div>
+            <button class="primary" type="button" id="saveFineDef">Strafe speichern</button>
+            <button class="primary ghosted" type="button" id="cancelFineDef" hidden>Abbrechen</button>
           </div>
-          <label class="check"><input id="drinkKing" type="checkbox" checked /> Zählt für den Bierkönig</label>
-          <button class="primary" type="button" id="saveDrink">Getränk speichern</button>
-          <button class="primary ghosted" type="button" id="cancelDrink" hidden>Abbrechen</button>
+          <div id="fineAdmin" style="margin-top:12px"></div>
         </div>
-        <div id="drinkAdmin" style="margin-top:12px"></div>
       </div>
 
-      <div class="admin-block">
-        <h2 class="section-title">Strafenkatalog</h2>
-        <div class="form-grid">
-          <input id="fineName" type="text" placeholder="z. B. Zu spät" maxlength="32" />
-          <div class="field">
-            <label for="fineAmount">Betrag €</label>
-            <input id="fineAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="2,00" />
+      <div class="admin-sub" data-admin-panel="extras" hidden>
+        <div class="admin-block">
+          <h2 class="section-title">Sonderzahlungen</h2>
+          <div class="form-grid">
+            <input id="extraName" type="text" placeholder="z. B. Geburtstag" maxlength="32" />
+            <div class="field">
+              <label for="extraAmount">Betrag €</label>
+              <input id="extraAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="10,00" />
+            </div>
+            <button class="primary" type="button" id="saveExtraDef">Sonderzahlung speichern</button>
+            <button class="primary ghosted" type="button" id="cancelExtraDef" hidden>Abbrechen</button>
           </div>
-          <button class="primary" type="button" id="saveFineDef">Strafe speichern</button>
-          <button class="primary ghosted" type="button" id="cancelFineDef" hidden>Abbrechen</button>
+          <div id="extraAdmin" style="margin-top:12px"></div>
         </div>
-        <div id="fineAdmin" style="margin-top:12px"></div>
       </div>
 
-      <div class="admin-block">
-        <h2 class="section-title">Sonderzahlungen</h2>
-        <div class="form-grid">
-          <input id="extraName" type="text" placeholder="z. B. Geburtstag" maxlength="32" />
-          <div class="field">
-            <label for="extraAmount">Betrag €</label>
-            <input id="extraAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="10,00" />
+      <div class="admin-sub" data-admin-panel="misc" hidden>
+        <div class="admin-block">
+          <h2 class="section-title">Tischspiele</h2>
+          <div class="form-grid">
+            <input id="gameName" type="text" placeholder="z. B. Schafkopf verloren" maxlength="32" />
+            <div class="field">
+              <label for="gameAmount">Betrag je Runde €</label>
+              <input id="gameAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,50" />
+            </div>
+            <button class="primary" type="button" id="saveGameDef">Spiel speichern</button>
+            <button class="primary ghosted" type="button" id="cancelGameDef" hidden>Abbrechen</button>
           </div>
-          <button class="primary" type="button" id="saveExtraDef">Sonderzahlung speichern</button>
-          <button class="primary ghosted" type="button" id="cancelExtraDef" hidden>Abbrechen</button>
+          <div id="gameAdmin" style="margin-top:12px"></div>
         </div>
-        <div id="extraAdmin" style="margin-top:12px"></div>
-      </div>
-
-      <div class="admin-block">
-        <h2 class="section-title">Tischspiele</h2>
-        <div class="form-grid">
-          <input id="gameName" type="text" placeholder="z. B. Schafkopf verloren" maxlength="32" />
-          <div class="field">
-            <label for="gameAmount">Betrag je Runde €</label>
-            <input id="gameAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,50" />
+        <div class="admin-block">
+          <h2 class="section-title">Monatlicher Stammtisch</h2>
+          <p class="member-meta" style="margin-bottom:10px">Ein Abend pro Monat. Vergangene Monate kannst du rückwirkend anlegen.</p>
+          <div class="form-grid">
+            <div class="field">
+              <label for="sessionDate">Datum des Abends</label>
+              <input id="sessionDate" type="date" />
+            </div>
+            <button class="primary" type="button" id="startSession">Monat anlegen oder öffnen</button>
           </div>
-          <button class="primary" type="button" id="saveGameDef">Spiel speichern</button>
-          <button class="primary ghosted" type="button" id="cancelGameDef" hidden>Abbrechen</button>
+          <div id="sessionAdmin" style="margin-top:12px"></div>
         </div>
-        <div id="gameAdmin" style="margin-top:12px"></div>
+        <div class="admin-block">
+          <h2 class="section-title">Gemeinsame Cloud</h2>
+          <p class="member-meta" style="margin-bottom:10px">Alle Geräte lesen und schreiben denselben Live-Stand.</p>
+          <div class="banner" id="cloudInfo">Verbinde…</div>
+        </div>
       </div>
     </section>
   </main>
@@ -389,7 +420,7 @@
       fines: ["Abendkonto", "Strafen, Geburtstag und Tischspiele."],
       beer: ["Bier-Wertung", "Über alle Monate des Jahres."],
       stats: ["Monatskonto", "Was jeder bis zum nächsten Stammtisch überweist."],
-      admin: ["Verwaltung", "Monate, Mitglieder und Kataloge."]
+      admin: ["Verwaltung", "Bereich wählen und Kataloge pflegen."]
     };
 
     let state = defaultState();
@@ -1292,6 +1323,15 @@
         });
         document.getElementById("title").textContent = titles[key][0];
         document.getElementById("subtitle").textContent = titles[key][1];
+        return;
+      }
+      const adminBtn = event.target.closest("[data-admin-section]");
+      if (adminBtn) {
+        const key = adminBtn.dataset.adminSection;
+        document.querySelectorAll("[data-admin-section]").forEach((el) => el.classList.toggle("on", el === adminBtn));
+        document.querySelectorAll("[data-admin-panel]").forEach((el) => {
+          el.hidden = el.dataset.adminPanel !== key;
+        });
         return;
       }
       const bumpBtn = event.target.closest("[data-bump]");
