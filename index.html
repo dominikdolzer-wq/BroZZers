@@ -2149,9 +2149,9 @@
       const notes = [];
       if (missing.length) notes.push(`${missing.length} Mitglied${missing.length === 1 ? " hat" : "er haben"} in ${year} noch kein Amt.`);
       if (dups.length) notes.push(`Doppelt vergeben: ${dups.join(", ")}.`);
+      const noteHtml = notes.length ? `<div class="banner warn" style="margin-bottom:12px">${notes.join(" ")}</div>` : "";
       document.getElementById("memberAdmin").innerHTML = state.members.length
-        ? `${notes.length ? `<div class="banner warn" style="margin-bottom:12px">${notes.join(" ")}</div>` : ""}`
-          ${state.members.map((m) => `
+        ? noteHtml + state.members.map((m) => `
             <div class="admin-card">
               <div class="admin-row">
                 <div>
@@ -2165,7 +2165,7 @@
                 <input id="office-${m.id}" list="officeOptions" data-office-member="${m.id}" type="text" maxlength="32" placeholder="z. B. Richter, Listenführer, DJ…" value="${escapeHtml(officeOf(m, year))}" />
               </div>
             </div>
-          `).join("")}`
+          `).join("")
         : `<p class="empty">Noch keine Mitglieder.</p>`;
 
       document.getElementById("drinkAdmin").innerHTML = state.drinks.length
@@ -2486,14 +2486,8 @@
     boot();
 
     if ("serviceWorker" in navigator) {
-      let swRefreshing = false;
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (swRefreshing) return;
-        swRefreshing = true;
-        location.reload();
-      });
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=17", { updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
+        navigator.serviceWorker.register("./sw.js?v=18", { updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
       });
     }
   </script>
