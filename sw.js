@@ -1,4 +1,4 @@
-const CACHE = "stammtisch-pwa-v14";
+const CACHE = "stammtisch-pwa-v15";
 const ASSETS = [
   "./",
   "./index.html",

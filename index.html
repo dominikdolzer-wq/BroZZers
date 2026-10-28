@@ -304,6 +304,8 @@
       display: none !important;
     }
     .gate {
+      position: relative;
+      z-index: 40;
       min-height: 100dvh;
       padding: calc(28px + var(--safe-t)) 20px 32px;
       display: flex;
@@ -371,14 +373,14 @@
     <img class="brand-logo" src="./logo.png" alt="BroZZers" />
     <h1 id="gateTitle">Nur für Mitglieder</h1>
     <p class="sub" id="gateSub">Daten und Fotos sind verschlüsselt. Ohne Passwort kann niemand sie lesen.</p>
-    <div id="gateLogin" class="form-grid">
+    <form id="gateLogin" class="form-grid" action="#" method="post">
       <div class="field">
         <label for="gatePin">Passwort</label>
         <input id="gatePin" type="password" maxlength="64" autocomplete="current-password" placeholder="Gemeinsames Passwort" />
       </div>
-      <button class="primary full" type="button" id="unlockBtn">Entschlüsseln</button>
-    </div>
-    <div id="gateSetup" class="form-grid" hidden>
+      <button class="primary full" type="submit" id="unlockBtn">Entschlüsseln</button>
+    </form>
+    <form id="gateSetup" class="form-grid" action="#" method="post" hidden>
       <p class="banner">Legt ein starkes Passwort fest (mindestens 10 Zeichen, nicht nur Zahlen). Nur intern weitergeben.</p>
       <div class="field">
         <label for="setupPin">Passwort festlegen</label>
@@ -388,8 +390,8 @@
         <label for="setupPin2">Passwort wiederholen</label>
         <input id="setupPin2" type="password" maxlength="64" autocomplete="new-password" />
       </div>
-      <button class="primary full" type="button" id="setupBtn">Verschlüsseln und eintreten</button>
-    </div>
+      <button class="primary full" type="submit" id="setupBtn">Verschlüsseln und eintreten</button>
+    </form>
     <p class="pin-error" id="gateError"></p>
   </div>
 
@@ -678,6 +680,7 @@
     let queuedVault = null;
     let queuedPlain = null;
     let gateFails = 0;
+    let unlocking = false;
     let ytPlayer = null;
     let musicWanted = false;
 
@@ -847,13 +850,12 @@
     async function afterUnlock() {
       delete state.accessHash;
       selectedMemberId = state.members[0]?.id || null;
-      await hydratePhotos();
       setUnlocked(true);
-      persistLocal();
-      render();
       showTab("events");
-      loadMusicApi();
-      playMusic();
+      try { render(); } catch (_) {}
+      persistLocal();
+      try { await hydratePhotos(); render(); } catch (_) {}
+      try { loadMusicApi(); playMusic(); } catch (_) {}
     }
     async function setupAccess() {
       const pin = document.getElementById("setupPin").value;
@@ -871,34 +873,48 @@
       await pushCloud();
     }
     async function unlockAccess() {
+      if (unlocking) return;
       if (gateFails >= 8) { showGateError("Zu viele Fehlversuche. Kurz warten, dann neu laden."); return; }
       const pin = document.getElementById("gatePin").value;
-      if (!queuedVault) {
-        showGateError("Cloud wird geladen…");
-        try {
-          const remote = await pullCloud();
-          if (isVault(remote)) queuedVault = remote;
-        } catch (_) {}
-        if (!queuedVault) {
-          paintGate("login");
-          showGateError("Verschlüsselte Daten noch nicht geladen. Bitte Seite neu laden.");
-          return;
-        }
-        showGateError("");
-      }
       if (!pin) { showGateError("Passwort eingeben."); return; }
+      unlocking = true;
+      const btn = document.getElementById("unlockBtn");
+      if (btn) { btn.disabled = true; btn.textContent = "Bitte warten…"; }
+      showGateError("Entschlüssele…");
       try {
-        const obj = await decryptVault(queuedVault, pin);
-        sessionPassword = pin;
-        state = migrate(obj);
-        queuedPlain = null;
-        gateFails = 0;
-        document.getElementById("gatePin").value = "";
-        wipePlainStorage();
-        await afterUnlock();
-      } catch (_) {
-        gateFails += 1;
-        showGateError("Falsches Passwort.");
+        if (!queuedVault) {
+          try {
+            const remote = await pullCloud();
+            if (isVault(remote)) queuedVault = remote;
+          } catch (err) {
+            showGateError("Cloud nicht erreichbar. " + (err && err.message ? err.message : "Bitte neu laden."));
+            return;
+          }
+          if (!queuedVault) {
+            paintGate("login");
+            showGateError("Verschlüsselte Daten noch nicht geladen. Bitte Seite neu laden.");
+            return;
+          }
+        }
+        try {
+          const obj = await decryptVault(queuedVault, pin);
+          sessionPassword = pin;
+          state = migrate(obj);
+          queuedPlain = null;
+          gateFails = 0;
+          document.getElementById("gatePin").value = "";
+          wipePlainStorage();
+          await afterUnlock();
+        } catch (_) {
+          gateFails += 1;
+          showGateError("Falsches Passwort.");
+        }
+      } finally {
+        unlocking = false;
+        if (btn && !unlocked) {
+          btn.disabled = false;
+          btn.textContent = "Entschlüsseln";
+        }
       }
     }
     async function lockAccess() {
@@ -937,6 +953,14 @@
       save();
       render();
     }
+    document.getElementById("gateLogin").addEventListener("submit", (event) => {
+      event.preventDefault();
+      unlockAccess();
+    });
+    document.getElementById("gateSetup").addEventListener("submit", (event) => {
+      event.preventDefault();
+      setupAccess();
+    });
     function todayISO() { return new Date().toISOString().slice(0, 10); }
     function monthKey(date) { return String(date).slice(0, 7); }
     function monthLabel(date) {
@@ -1194,7 +1218,17 @@
     }
 
     async function pullCloud() {
-      const res = await fetch(CLOUD_URL + "?t=" + Date.now(), { cache: "no-store" });
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 8000);
+      let res;
+      try {
+        res = await fetch(CLOUD_URL + "?t=" + Date.now(), { cache: "no-store", signal: ac.signal });
+      } catch (err) {
+        if (err && err.name === "AbortError") throw new Error("Cloud antwortet zu langsam.");
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
       const text = await res.text();
       if (!res.ok) throw new Error(cloudErrorMessage(res, text, "Lesen"));
       const doc = text ? JSON.parse(text) : null;
@@ -2245,7 +2279,7 @@
     });
 
     document.body.addEventListener("click", (event) => {
-      const tab = event.target.closest(".tab");
+      const tab = event.target.closest("button.tab[data-tab]");
       if (tab) {
         showTab(tab.dataset.tab);
         return;
