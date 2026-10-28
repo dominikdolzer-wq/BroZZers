@@ -331,6 +331,27 @@
     .event-place { color: var(--gold-2); font-size: 1.02rem; }
     .event-card.next { border-color: rgba(232, 196, 120, 0.45); background: linear-gradient(135deg, rgba(232,196,120,0.16), rgba(217,146,59,0.06)); }
     .event-card.past { opacity: 0.78; }
+    .music-bar {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(0,0,0,0.28);
+    }
+    .music-bar .yt {
+      width: 96px;
+      height: 54px;
+      border-radius: 10px;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: #000;
+    }
+    .music-meta { flex: 1; min-width: 0; }
+    .music-meta strong { display: block; font-size: 0.92rem; }
+    .music-meta span { color: var(--muted); font-size: 0.78rem; }
   </style>
 </head>
 <body class="locked">
@@ -368,6 +389,14 @@
     <h1 id="title">Getränke</h1>
     <p class="sub" id="subtitle">Zähler für den gewählten Stammtisch-Abend.</p>
     <select id="sessionSelect" aria-label="Stammtisch-Monat" style="margin-top:12px"></select>
+    <div class="music-bar">
+      <div class="yt" id="ytHost"></div>
+      <div class="music-meta">
+        <strong>Fortunate Son</strong>
+        <span>CCR · offizieller Clip</span>
+      </div>
+      <button class="tiny" type="button" id="musicToggle" aria-label="Musik">▶</button>
+    </div>
   </header>
 
   <main>
@@ -595,6 +624,7 @@
     const LEGACY_KEYS = ["stammtisch-v2", "stammtisch-v1"];
     const CLOUD_URL = "https://api.npoint.io/550b604d3ab7190111c0";
     const KDF_ITER = 210000;
+    const YT_TRACK = "40JmEj0_aVM";
     const COLORS = ["#e8c478", "#d9923b", "#f0d9a0", "#c07a4a", "#8fbf7a", "#7aa7c7", "#e07a5f", "#c9a0dc"];
     const euro = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
     const monthFmt = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
@@ -628,8 +658,69 @@
     let queuedVault = null;
     let queuedPlain = null;
     let gateFails = 0;
+    let ytPlayer = null;
+    let musicWanted = false;
 
     function uid() { return Math.random().toString(36).slice(2, 9); }
+    function setMusicButton(playing) {
+      const btn = document.getElementById("musicToggle");
+      if (btn) btn.textContent = playing ? "❚❚" : "▶";
+    }
+    function musicPlaying() {
+      return !!(ytPlayer && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === 1);
+    }
+    function playMusic() {
+      musicWanted = true;
+      if (ytPlayer && ytPlayer.playVideo) {
+        ytPlayer.playVideo();
+        setMusicButton(true);
+      }
+    }
+    function pauseMusic() {
+      musicWanted = false;
+      if (ytPlayer && ytPlayer.pauseVideo) ytPlayer.pauseVideo();
+      setMusicButton(false);
+    }
+    function toggleMusic() {
+      if (musicPlaying() || (musicWanted && ytPlayer)) pauseMusic();
+      else playMusic();
+    }
+    function createYtPlayer() {
+      if (ytPlayer || !window.YT || !YT.Player) return;
+      ytPlayer = new YT.Player("ytHost", {
+        videoId: YT_TRACK,
+        width: 96,
+        height: 54,
+        playerVars: {
+          autoplay: 0,
+          controls: 0,
+          rel: 0,
+          playsinline: 1,
+          modestbranding: 1,
+          loop: 1,
+          playlist: YT_TRACK,
+          origin: location.origin
+        },
+        events: {
+          onReady() {
+            if (musicWanted && unlocked) playMusic();
+          },
+          onStateChange(event) {
+            setMusicButton(event.data === 1);
+            if (event.data === 0 && musicWanted && ytPlayer.playVideo) ytPlayer.playVideo();
+          }
+        }
+      });
+    }
+    function loadMusicApi() {
+      if (window.YT && YT.Player) { createYtPlayer(); return; }
+      if (document.getElementById("ytApi")) return;
+      window.onYouTubeIframeAPIReady = createYtPlayer;
+      const script = document.createElement("script");
+      script.id = "ytApi";
+      script.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(script);
+    }
     function passwordIssue(pw) {
       const value = String(pw || "");
       if (value.length < 10) return "Mindestens 10 Zeichen.";
@@ -728,6 +819,8 @@
       setUnlocked(true);
       persistLocal();
       render();
+      loadMusicApi();
+      playMusic();
     }
     async function setupAccess() {
       const pin = document.getElementById("setupPin").value;
@@ -764,6 +857,7 @@
       }
     }
     async function lockAccess() {
+      pauseMusic();
       sessionPassword = null;
       document.getElementById("gatePin").value = "";
       state = defaultState();
@@ -1181,6 +1275,7 @@
       if (queuedVault) paintGate("login");
       else paintGate("setup");
       setUnlocked(false);
+      loadMusicApi();
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) syncCloud();
       });
@@ -2091,6 +2186,7 @@
       if (event.target.closest("#unlockBtn")) { unlockAccess(); return; }
       if (event.target.closest("#setupBtn")) { setupAccess(); return; }
       if (event.target.closest("#lockApp")) { lockAccess(); return; }
+      if (event.target.closest("#musicToggle")) { toggleMusic(); return; }
       if (event.target.closest("#savePin")) { changeAccess(); return; }
       if (event.target.closest("#forceSync")) {
         lastCloudFailAt = 0;
