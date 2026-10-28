@@ -337,24 +337,25 @@
   <div id="gate" class="gate">
     <p class="kicker">BroZZers</p>
     <h1 id="gateTitle">Nur für Mitglieder</h1>
-    <p class="sub" id="gateSub">Zugangscode eingeben, den ihr intern vereinbart.</p>
+    <p class="sub" id="gateSub">Daten und Fotos sind verschlüsselt. Ohne Passwort kann niemand sie lesen.</p>
     <div id="gateLogin" class="form-grid" hidden>
       <div class="field">
-        <label for="gatePin">Zugangscode</label>
-        <input id="gatePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="4–8 Ziffern" />
+        <label for="gatePin">Passwort</label>
+        <input id="gatePin" type="password" maxlength="64" autocomplete="current-password" placeholder="Gemeinsames Passwort" />
       </div>
-      <button class="primary full" type="button" id="unlockBtn">Eintreten</button>
+      <button class="primary full" type="button" id="unlockBtn">Entschlüsseln</button>
     </div>
     <div id="gateSetup" class="form-grid" hidden>
+      <p class="banner">Legt ein starkes Passwort fest (mindestens 10 Zeichen, nicht nur Zahlen). Nur intern weitergeben.</p>
       <div class="field">
-        <label for="setupPin">Neuen Code festlegen</label>
-        <input id="setupPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="4–8 Ziffern" />
+        <label for="setupPin">Passwort festlegen</label>
+        <input id="setupPin" type="password" maxlength="64" autocomplete="new-password" placeholder="mind. 10 Zeichen" />
       </div>
       <div class="field">
-        <label for="setupPin2">Code wiederholen</label>
-        <input id="setupPin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" />
+        <label for="setupPin2">Passwort wiederholen</label>
+        <input id="setupPin2" type="password" maxlength="64" autocomplete="new-password" />
       </div>
-      <button class="primary full" type="button" id="setupBtn">Code speichern und eintreten</button>
+      <button class="primary full" type="button" id="setupBtn">Verschlüsseln und eintreten</button>
     </div>
     <p class="pin-error" id="gateError"></p>
   </div>
@@ -555,23 +556,23 @@
           <button class="primary full" type="button" id="forceSync">Jetzt synchronisieren</button>
         </div>
         <div class="admin-block">
-          <h2 class="section-title">Mitglieder-Zugang</h2>
-          <p class="member-meta" style="margin-bottom:10px">Gemeinsamer Zahlencode. Nur wer ihn kennt, kommt in die App. In Verwalten jederzeit ändern.</p>
-          <div class="banner" id="gateInfo">Kein Code gesetzt.</div>
+          <h2 class="section-title">Verschlüsselung</h2>
+          <p class="member-meta" style="margin-bottom:10px">Fotos und Stammtischdaten liegen nur verschlüsselt in der Cloud. Ohne Passwort sind sie unlesbar.</p>
+          <div class="banner" id="gateInfo">Verschlüsselung aktiv.</div>
           <div class="form-grid">
             <div class="field">
-              <label for="oldPin">Aktueller Code</label>
-              <input id="oldPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" />
+              <label for="oldPin">Aktuelles Passwort</label>
+              <input id="oldPin" type="password" maxlength="64" autocomplete="current-password" />
             </div>
             <div class="field">
-              <label for="newPin">Neuer Code</label>
-              <input id="newPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="4–8 Ziffern" />
+              <label for="newPin">Neues Passwort</label>
+              <input id="newPin" type="password" maxlength="64" autocomplete="new-password" placeholder="mind. 10 Zeichen" />
             </div>
             <div class="field">
-              <label for="newPin2">Neuen Code wiederholen</label>
-              <input id="newPin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" />
+              <label for="newPin2">Neues Passwort wiederholen</label>
+              <input id="newPin2" type="password" maxlength="64" autocomplete="new-password" />
             </div>
-            <button class="primary" type="button" id="savePin">Zugangscode speichern</button>
+            <button class="primary" type="button" id="savePin">Passwort ändern</button>
           </div>
         </div>
       </div>
@@ -590,8 +591,10 @@
 
   <script>
     const STORAGE_KEY = "stammtisch-v3";
+    const VAULT_KEY = "stammtisch-vault-v1";
     const LEGACY_KEYS = ["stammtisch-v2", "stammtisch-v1"];
     const CLOUD_URL = "https://api.npoint.io/550b604d3ab7190111c0";
+    const KDF_ITER = 210000;
     const COLORS = ["#e8c478", "#d9923b", "#f0d9a0", "#c07a4a", "#8fbf7a", "#7aa7c7", "#e07a5f", "#c9a0dc"];
     const euro = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
     const monthFmt = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
@@ -607,7 +610,6 @@
     const PHOTO_DB = "stammtisch-photos-v1";
     const MAX_PHOTOS = 12;
     const MAX_PHOTO_EDGE = 960;
-    const GATE_KEY = "stammtisch-gate-v1";
 
     let state = defaultState();
     let selectedMemberId = null;
@@ -622,27 +624,76 @@
     let lastPullAt = 0;
     let lastCloudFailAt = 0;
     let unlocked = false;
+    let sessionPassword = null;
+    let queuedVault = null;
+    let queuedPlain = null;
+    let gateFails = 0;
 
     function uid() { return Math.random().toString(36).slice(2, 9); }
-    function normalizePin(value) {
-      return String(value || "").replace(/\D/g, "");
+    function passwordIssue(pw) {
+      const value = String(pw || "");
+      if (value.length < 10) return "Mindestens 10 Zeichen.";
+      if (/^\d+$/.test(value)) return "Kein reiner Zahlencode – bitte Buchstaben oder Sonderzeichen.";
+      return "";
     }
-    function pinOk(pin) {
-      return pin.length >= 4 && pin.length <= 8;
+    function bytesToB64(bytes) {
+      let s = "";
+      const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+      arr.forEach((b) => { s += String.fromCharCode(b); });
+      return btoa(s);
     }
-    async function hashPin(pin) {
-      const bytes = new TextEncoder().encode("brozzers-gate|" + pin);
-      const buf = await crypto.subtle.digest("SHA-256", bytes);
-      return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    function b64ToBytes(str) {
+      const bin = atob(str);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+      return out;
     }
-    function rememberGate(hash) {
-      try { localStorage.setItem(GATE_KEY, hash); } catch (_) {}
+    function isVault(doc) {
+      return !!(doc && doc.enc === 1 && doc.data && doc.salt && doc.iv);
     }
-    function forgetGate() {
-      try { localStorage.removeItem(GATE_KEY); } catch (_) {}
+    async function deriveKey(password, saltBytes, iter) {
+      const base = await crypto.subtle.importKey(
+        "raw",
+        new TextEncoder().encode(password),
+        "PBKDF2",
+        false,
+        ["deriveKey"]
+      );
+      return crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: saltBytes, iterations: iter || KDF_ITER, hash: "SHA-256" },
+        base,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt", "decrypt"]
+      );
     }
-    function rememberedHash() {
-      try { return localStorage.getItem(GATE_KEY) || ""; } catch (_) { return ""; }
+    async function encryptVault(obj, password) {
+      const salt = crypto.getRandomValues(new Uint8Array(16));
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const key = await deriveKey(password, salt, KDF_ITER);
+      const copy = JSON.parse(JSON.stringify(obj));
+      delete copy.accessHash;
+      delete copy._id;
+      const pt = new TextEncoder().encode(JSON.stringify(copy));
+      const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, pt);
+      return {
+        enc: 1,
+        kdf: "pbkdf2",
+        iter: KDF_ITER,
+        salt: bytesToB64(salt),
+        iv: bytesToB64(iv),
+        data: bytesToB64(ct),
+        updatedAt: copy.updatedAt || Date.now()
+      };
+    }
+    async function decryptVault(vault, password) {
+      const key = await deriveKey(password, b64ToBytes(vault.salt), vault.iter || KDF_ITER);
+      const pt = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: b64ToBytes(vault.iv) },
+        key,
+        b64ToBytes(vault.data)
+      );
+      return JSON.parse(new TextDecoder().decode(pt));
     }
     function showGateError(text) {
       const el = document.getElementById("gateError");
@@ -658,64 +709,89 @@
       const setup = mode === "setup";
       document.getElementById("gateSetup").hidden = !setup;
       document.getElementById("gateLogin").hidden = setup;
-      document.getElementById("gateTitle").textContent = setup ? "Zugang einrichten" : "Nur für Mitglieder";
+      document.getElementById("gateTitle").textContent = setup ? "Verschlüsselung einrichten" : "Nur für Mitglieder";
       document.getElementById("gateSub").textContent = setup
-        ? "Legt jetzt einen Zahlencode fest und gebt ihn nur intern weiter."
-        : "Zugangscode eingeben, den ihr intern vereinbart.";
+        ? "Ohne dieses Passwort bleiben Fotos und Daten unlesbar."
+        : "Daten und Fotos sind verschlüsselt. Ohne Passwort kann niemand sie lesen.";
     }
-    function applyGate() {
-      if (!state.accessHash) {
-        paintGate("setup");
-        setUnlocked(false);
-        return;
-      }
-      if (rememberedHash() === state.accessHash) {
-        setUnlocked(true);
-        return;
-      }
-      paintGate("login");
-      setUnlocked(false);
+    function wipePlainStorage() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        LEGACY_KEYS.forEach((k) => localStorage.removeItem(k));
+        localStorage.removeItem("stammtisch-gate-v1");
+      } catch (_) {}
     }
-    async function setupAccess() {
-      const pin = normalizePin(document.getElementById("setupPin").value);
-      const pin2 = normalizePin(document.getElementById("setupPin2").value);
-      if (!pinOk(pin)) { showGateError("Bitte 4 bis 8 Ziffern."); return; }
-      if (pin !== pin2) { showGateError("Die Codes stimmen nicht überein."); return; }
-      state.accessHash = await hashPin(pin);
-      rememberGate(state.accessHash);
-      save();
+    async function afterUnlock() {
+      delete state.accessHash;
+      selectedMemberId = state.members[0]?.id || null;
+      await hydratePhotos();
       setUnlocked(true);
+      persistLocal();
       render();
     }
-    async function unlockAccess() {
-      const pin = normalizePin(document.getElementById("gatePin").value);
-      if (!state.accessHash) { paintGate("setup"); return; }
-      if (!pinOk(pin)) { showGateError("Bitte 4 bis 8 Ziffern."); return; }
-      const hash = await hashPin(pin);
-      if (hash !== state.accessHash) { showGateError("Falscher Code."); return; }
-      rememberGate(hash);
-      document.getElementById("gatePin").value = "";
-      setUnlocked(true);
+    async function setupAccess() {
+      const pin = document.getElementById("setupPin").value;
+      const pin2 = document.getElementById("setupPin2").value;
+      const issue = passwordIssue(pin);
+      if (issue) { showGateError(issue); return; }
+      if (pin !== pin2) { showGateError("Die Passwörter stimmen nicht überein."); return; }
+      state = queuedPlain || state || defaultState();
+      if (!state.updatedAt) state.updatedAt = Date.now();
+      sessionPassword = pin;
+      queuedVault = null;
+      wipePlainStorage();
+      dirty = true;
+      await afterUnlock();
+      await pushCloud();
     }
-    function lockAccess() {
-      forgetGate();
+    async function unlockAccess() {
+      if (gateFails >= 8) { showGateError("Zu viele Fehlversuche. Kurz warten, dann neu laden."); return; }
+      const pin = document.getElementById("gatePin").value;
+      if (!queuedVault) { paintGate("setup"); return; }
+      if (!pin) { showGateError("Passwort eingeben."); return; }
+      try {
+        const obj = await decryptVault(queuedVault, pin);
+        sessionPassword = pin;
+        state = migrate(obj);
+        queuedPlain = null;
+        gateFails = 0;
+        document.getElementById("gatePin").value = "";
+        wipePlainStorage();
+        await afterUnlock();
+      } catch (_) {
+        gateFails += 1;
+        showGateError("Falsches Passwort.");
+      }
+    }
+    async function lockAccess() {
+      sessionPassword = null;
       document.getElementById("gatePin").value = "";
-      applyGate();
+      state = defaultState();
+      try {
+        const db = await openPhotoDb();
+        await new Promise((resolve, reject) => {
+          const tx = db.transaction("photos", "readwrite");
+          tx.objectStore("photos").clear();
+          tx.oncomplete = resolve;
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (_) {}
+      if (queuedVault) paintGate("login");
+      else paintGate("setup");
+      setUnlocked(false);
     }
     async function changeAccess() {
-      const oldPin = normalizePin(document.getElementById("oldPin").value);
-      const pin = normalizePin(document.getElementById("newPin").value);
-      const pin2 = normalizePin(document.getElementById("newPin2").value);
-      if (state.accessHash) {
-        if (!pinOk(oldPin) || await hashPin(oldPin) !== state.accessHash) {
-          alert("Aktueller Code ist falsch.");
-          return;
-        }
+      const oldPin = document.getElementById("oldPin").value;
+      const pin = document.getElementById("newPin").value;
+      const pin2 = document.getElementById("newPin2").value;
+      if (!sessionPassword || oldPin !== sessionPassword) {
+        alert("Aktuelles Passwort ist falsch.");
+        return;
       }
-      if (!pinOk(pin)) { alert("Neuer Code: 4 bis 8 Ziffern."); return; }
-      if (pin !== pin2) { alert("Die neuen Codes stimmen nicht überein."); return; }
-      state.accessHash = await hashPin(pin);
-      rememberGate(state.accessHash);
+      const issue = passwordIssue(pin);
+      if (issue) { alert(issue); return; }
+      if (pin !== pin2) { alert("Die neuen Passwörter stimmen nicht überein."); return; }
+      sessionPassword = pin;
       document.getElementById("oldPin").value = "";
       document.getElementById("newPin").value = "";
       document.getElementById("newPin2").value = "";
@@ -862,16 +938,18 @@
       } catch { return defaultState(); }
     }
     function persistLocal() {
-      try {
-        const copy = JSON.parse(JSON.stringify(state));
-        (copy.sessions || []).forEach((s) => {
-          (s.photos || []).forEach((p) => { delete p.data; });
-        });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(copy));
-      } catch (_) {}
+      if (!sessionPassword || !unlocked) return;
+      const copy = JSON.parse(JSON.stringify(state));
+      (copy.sessions || []).forEach((s) => {
+        (s.photos || []).forEach((p) => { delete p.data; });
+      });
+      encryptVault(copy, sessionPassword).then((vault) => {
+        try { localStorage.setItem(VAULT_KEY, JSON.stringify(vault)); } catch (_) {}
+      }).catch(() => {});
     }
 
     function save() {
+      if (!sessionPassword || !unlocked) return;
       state.updatedAt = Date.now();
       dirty = true;
       persistLocal();
@@ -940,13 +1018,14 @@
     async function cloudPayload() {
       const copy = JSON.parse(JSON.stringify(state));
       delete copy._id;
+      delete copy.accessHash;
       copy.updatedAt = state.updatedAt || Date.now();
       for (const session of copy.sessions || []) {
         for (const photo of session.photos || []) {
           if (!photo.data) photo.data = await getPhotoData(photo.id);
         }
       }
-      return copy;
+      return encryptVault(copy, sessionPassword);
     }
 
     function remoteLooksValid(doc) {
@@ -978,13 +1057,16 @@
     }
 
     async function pushCloud() {
+      if (!sessionPassword || !unlocked) return;
       if (pushing) {
         pushQueued = true;
         return;
       }
       pushing = true;
       try {
-        const body = JSON.stringify(await cloudPayload());
+        const vault = await cloudPayload();
+        queuedVault = vault;
+        const body = JSON.stringify(vault);
         const res = await fetch(CLOUD_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1010,6 +1092,7 @@
     }
 
     async function syncCloud(force) {
+      if (!unlocked || !sessionPassword) return;
       if (!force && lastCloudFailAt && Date.now() - lastCloudFailAt < 30000) return;
       if (dirty) {
         await pushCloud();
@@ -1019,29 +1102,40 @@
       if (!force && lastPullAt && Date.now() - lastPullAt < 8000) return;
       try {
         const remote = await pullCloud();
-        if (!remoteLooksValid(remote)) {
+        let remoteState = null;
+        if (isVault(remote)) {
+          try {
+            remoteState = migrate(await decryptVault(remote, sessionPassword));
+            queuedVault = remote;
+          } catch (_) {
+            setCloudStatus("ok", "Live – Cloud-Stand ohne Passwort unlesbar, lokaler Stand bleibt.");
+            return;
+          }
+        } else if (remoteLooksValid(remote)) {
+          remoteState = migrate(remote);
+        }
+        if (!remoteState) {
           setCloudStatus("ok", "Live – alle sehen denselben Stand.");
           return;
         }
-        if (stateWeight(state) > stateWeight(remote) && Number(state.updatedAt || 0) >= Number(remote.updatedAt || 0)) {
+        if (stateWeight(state) > stateWeight(remoteState) && Number(state.updatedAt || 0) >= Number(remoteState.updatedAt || 0)) {
           dirty = true;
           await pushCloud();
           return;
         }
-        const remoteAt = Number(remote.updatedAt || 0);
+        const remoteAt = Number(remoteState.updatedAt || remote.updatedAt || 0);
         const localAt = Number(state.updatedAt || 0);
-        if (remoteAt <= localAt && stateWeight(remote) <= stateWeight(state)) {
+        if (remoteAt <= localAt && stateWeight(remoteState) <= stateWeight(state)) {
           setCloudStatus("ok", "Live – alle sehen denselben Stand.");
           return;
         }
-        state = migrate(remote);
+        state = remoteState;
         selectedMemberId = state.members.some((m) => m.id === selectedMemberId)
           ? selectedMemberId
           : (state.members[0]?.id || null);
         await hydratePhotos();
         persistLocal();
         render();
-        applyGate();
         setCloudStatus("ok", "Live – Stand von anderem Gerät übernommen.");
       } catch (err) {
         lastCloudFailAt = Date.now();
@@ -1062,34 +1156,31 @@
     }
 
     async function boot() {
-      const local = load();
-      if (!local.updatedAt) local.updatedAt = Date.now();
+      queuedVault = null;
+      queuedPlain = null;
+      try {
+        const raw = localStorage.getItem(VAULT_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (isVault(parsed)) queuedVault = parsed;
+        }
+      } catch (_) {}
+      try {
+        const local = load();
+        if (remoteLooksValid(local)) queuedPlain = local;
+      } catch (_) {}
       try {
         const remote = await pullCloud();
-        const takeRemote = remoteLooksValid(remote) &&
-          (stateWeight(remote) > stateWeight(local) ||
-            (stateWeight(remote) >= stateWeight(local) && Number(remote.updatedAt || 0) >= Number(local.updatedAt || 0)));
-        if (takeRemote) {
-          const localHash = local.accessHash;
-          state = migrate(remote);
-          if (localHash && !state.accessHash) state.accessHash = localHash;
-          setCloudStatus("ok", "Live aus der Cloud geladen.");
-        } else {
-          state = local;
-          state.updatedAt = Date.now();
-          dirty = true;
-          await pushCloud();
-        }
+        if (isVault(remote)) queuedVault = remote;
+        else if (remoteLooksValid(remote)) queuedPlain = migrate(remote);
+        setCloudStatus("ok", isVault(remote) ? "Verschlüsselte Cloud bereit." : "Cloud bereit – Passwort festlegen.");
       } catch (err) {
-        state = local;
         lastCloudFailAt = Date.now();
-        setCloudStatus("err", "Cloud nicht erreichbar – Offline-Stand. " + (err && err.message ? err.message : ""));
+        setCloudStatus("err", "Cloud nicht erreichbar. " + (err && err.message ? err.message : ""));
       }
-      selectedMemberId = state.members[0]?.id || null;
-      await hydratePhotos();
-      persistLocal();
-      render();
-      applyGate();
+      if (queuedVault) paintGate("login");
+      else paintGate("setup");
+      setUnlocked(false);
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) syncCloud();
       });
@@ -1859,9 +1950,9 @@
       }
       const gateInfo = document.getElementById("gateInfo");
       if (gateInfo) {
-        gateInfo.innerHTML = state.accessHash
-          ? "Zugang ist aktiv. Mitglieder brauchen den gemeinsamen Zahlencode."
-          : "Noch kein Code – beim ersten Öffnen oder hier festlegen.";
+        gateInfo.innerHTML = sessionPassword
+          ? "Verschlüsselung ist aktiv. Fotos und Daten sind in der Cloud ohne Passwort unlesbar."
+          : "Noch kein Passwort – zuerst am Startschirm festlegen.";
       }
     }
 
