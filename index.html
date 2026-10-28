@@ -1156,7 +1156,14 @@
     }
 
     async function pullCloud() {
-      const res = await fetch(CLOUD_URL + "?t=" + Date.now(), { cache: "no-store" });
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 10000);
+      let res;
+      try {
+        res = await fetch(CLOUD_URL + "?t=" + Date.now(), { cache: "no-store", signal: ac.signal });
+      } finally {
+        clearTimeout(timer);
+      }
       const text = await res.text();
       if (!res.ok) throw new Error(cloudErrorMessage(res, text, "Lesen"));
       const doc = text ? JSON.parse(text) : null;
@@ -1279,6 +1286,9 @@
         const local = load();
         if (remoteLooksValid(local)) queuedPlain = local;
       } catch (_) {}
+      if (queuedVault) paintGate("login");
+      else paintGate("setup");
+      setUnlocked(false);
       try {
         const remote = await pullCloud();
         if (isVault(remote)) queuedVault = remote;
@@ -1286,11 +1296,11 @@
         setCloudStatus("ok", isVault(remote) ? "Verschlüsselte Cloud bereit." : "Cloud bereit – Passwort festlegen.");
       } catch (err) {
         lastCloudFailAt = Date.now();
-        setCloudStatus("err", "Cloud nicht erreichbar. " + (err && err.message ? err.message : ""));
+        const msg = err && err.name === "AbortError" ? "Cloud antwortet zu langsam." : (err && err.message ? err.message : "");
+        setCloudStatus("err", "Cloud nicht erreichbar. " + msg);
       }
       if (queuedVault) paintGate("login");
       else paintGate("setup");
-      setUnlocked(false);
       loadMusicApi();
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) syncCloud();
