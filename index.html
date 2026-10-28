@@ -205,11 +205,24 @@
     }
     .tab .ico { font-size: 1.2rem; }
     .tab.on { color: var(--gold); background: rgba(232, 196, 120, 0.1); }
+    .sync-badge {
+      display: inline-block;
+      margin-left: 8px;
+      letter-spacing: 0.04em;
+      font-size: 0.68rem;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(232, 196, 120, 0.12);
+      vertical-align: middle;
+    }
+    .sync-badge.ok { color: #8fbf7a; }
+    .sync-badge.wait { color: var(--gold); }
+    .sync-badge.err { color: var(--danger); }
   </style>
 </head>
 <body>
   <header class="app-header">
-    <p class="kicker">Stammtisch</p>
+    <p class="kicker">Stammtisch <span id="syncBadge" class="sync-badge">Cloud…</span></p>
     <h1 id="title">Getränke</h1>
     <p class="sub" id="subtitle">Zähler für den gewählten Stammtisch-Abend.</p>
     <select id="sessionSelect" aria-label="Stammtisch-Monat" style="margin-top:12px"></select>
@@ -264,6 +277,11 @@
     </section>
 
     <section id="panel-admin" class="panel" hidden>
+      <div class="admin-block">
+        <h2 class="section-title">Gemeinsame Cloud</h2>
+        <p class="member-meta" style="margin-bottom:10px">Alle Geräte lesen und schreiben denselben Live-Stand. Lokal dient nur noch als Offline-Puffer.</p>
+        <div class="banner" id="cloudInfo">Verbinde…</div>
+      </div>
       <div class="admin-block">
         <h2 class="section-title">Monatlicher Stammtisch</h2>
         <p class="member-meta" style="margin-bottom:10px">Ein Abend pro Monat. Vergangene Monate 2026 kannst du rückwirkend anlegen: Datum wählen, anlegen, dann Getränke und Beträge eintragen. Der aktuelle Monat bleibt dabei offen.</p>
@@ -362,6 +380,7 @@
   <script>
     const STORAGE_KEY = "stammtisch-v3";
     const LEGACY_KEYS = ["stammtisch-v2", "stammtisch-v1"];
+    const CLOUD_URL = "https://crudcrud.com/api/ab5c34af450a408394fa69e537a8d574/stammtisch/6ae2638e4e731703e86b76f9";
     const COLORS = ["#e8c478", "#d9923b", "#f0d9a0", "#c07a4a", "#8fbf7a", "#7aa7c7", "#e07a5f", "#c9a0dc"];
     const euro = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
     const monthFmt = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
@@ -373,10 +392,15 @@
       admin: ["Verwaltung", "Monate, Mitglieder und Kataloge."]
     };
 
-    let state = load();
-    let selectedMemberId = state.members[0]?.id || null;
+    let state = defaultState();
+    let selectedMemberId = null;
     let editing = { drink: null, fine: null, extra: null, game: null };
     let openYears = new Set([String(new Date().getFullYear())]);
+    let cloudStatus = "wait";
+    let cloudNote = "Verbinde mit der Cloud…";
+    let pushing = false;
+    let dirty = false;
+    let saveTimer = null;
 
     function uid() { return Math.random().toString(36).slice(2, 9); }
     function todayISO() { return new Date().toISOString().slice(0, 10); }
@@ -492,7 +516,111 @@
         return migrate(JSON.parse(raw));
       } catch { return defaultState(); }
     }
-    function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    function save() {
+      state.updatedAt = Date.now();
+      dirty = true;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(pushCloud, 450);
+      setCloudStatus("wait", "Speichere in die Cloud…");
+    }
+
+    function cloudPayload() {
+      const copy = JSON.parse(JSON.stringify(state));
+      delete copy._id;
+      copy.updatedAt = state.updatedAt || Date.now();
+      return copy;
+    }
+
+    async function pullCloud() {
+      const res = await fetch(CLOUD_URL, { cache: "no-store" });
+      if (!res.ok) throw new Error("Cloud-Lesen fehlgeschlagen");
+      const doc = await res.json();
+      if (!doc || typeof doc !== "object") return null;
+      delete doc._id;
+      return doc;
+    }
+
+    async function pushCloud() {
+      if (pushing) return;
+      pushing = true;
+      try {
+        const body = JSON.stringify(cloudPayload());
+        const res = await fetch(CLOUD_URL, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body
+        });
+        if (!res.ok) throw new Error("Cloud-Schreiben fehlgeschlagen");
+        dirty = false;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+        setCloudStatus("ok", "Live – alle sehen denselben Stand.");
+      } catch (_) {
+        setCloudStatus("err", "Cloud gerade nicht erreichbar. Lokal zwischengespeichert.");
+      } finally {
+        pushing = false;
+      }
+    }
+
+    async function syncCloud() {
+      if (pushing || dirty) return;
+      try {
+        const remote = await pullCloud();
+        if (!remote || !remote.members) return;
+        const remoteAt = Number(remote.updatedAt || 0);
+        const localAt = Number(state.updatedAt || 0);
+        if (remoteAt <= localAt) {
+          setCloudStatus("ok", "Live – alle sehen denselben Stand.");
+          return;
+        }
+        state = migrate(remote);
+        selectedMemberId = state.members.some((m) => m.id === selectedMemberId)
+          ? selectedMemberId
+          : (state.members[0]?.id || null);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+        render();
+        setCloudStatus("ok", "Live – Stand von anderem Gerät übernommen.");
+      } catch (_) {
+        setCloudStatus("err", "Cloud-Abgleich fehlgeschlagen.");
+      }
+    }
+
+    function setCloudStatus(kind, note) {
+      cloudStatus = kind;
+      cloudNote = note;
+      const badge = document.getElementById("syncBadge");
+      const info = document.getElementById("cloudInfo");
+      if (badge) {
+        badge.className = "sync-badge " + kind;
+        badge.textContent = kind === "ok" ? "Live" : kind === "err" ? "Offline" : "Sync…";
+      }
+      if (info) info.textContent = note;
+    }
+
+    async function boot() {
+      const local = load();
+      try {
+        const remote = await pullCloud();
+        if (remote && remote.members && Number(remote.updatedAt || 0) > 0) {
+          state = migrate(remote);
+          setCloudStatus("ok", "Live aus der Cloud geladen.");
+        } else {
+          state = local;
+          state.updatedAt = Date.now();
+          await pushCloud();
+        }
+      } catch (_) {
+        state = local;
+        setCloudStatus("err", "Cloud nicht erreichbar – Offline-Stand.");
+      }
+      selectedMemberId = state.members[0]?.id || null;
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+      render();
+      setInterval(syncCloud, 4000);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) syncCloud();
+      });
+    }
 
     function parseMoney(value) {
       const amount = Number.parseFloat(String(value).replace(",", "."));
@@ -1144,6 +1272,7 @@
       renderBeer();
       renderStats();
       renderAdmin();
+      setCloudStatus(cloudStatus, cloudNote);
     }
 
     document.getElementById("sessionSelect").addEventListener("change", (event) => {
@@ -1269,7 +1398,7 @@
       if (event.key === "Enter") addMember();
     });
 
-    render();
+    boot();
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
