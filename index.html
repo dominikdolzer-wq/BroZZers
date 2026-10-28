@@ -477,10 +477,16 @@
       <div class="admin-sub" data-admin-panel="members">
         <div class="admin-block">
           <h2 class="section-title">Mitglieder</h2>
+          <p class="member-meta" style="margin-bottom:10px">Jedes Mitglied hat ein Amt. Die Ämter werden jedes Jahr neu gewählt und hier gesetzt.</p>
           <div class="add-row inline">
             <input id="newMember" type="text" placeholder="Vorname…" maxlength="24" />
             <button type="button" id="addMember">Hinzu</button>
           </div>
+          <div class="field" style="margin-top:12px">
+            <label for="officeYear">Amtsjahr</label>
+            <select id="officeYear"></select>
+          </div>
+          <datalist id="officeOptions"></datalist>
           <div id="memberAdmin" style="margin-top:12px"></div>
         </div>
       </div>
@@ -640,6 +646,7 @@
     const PHOTO_DB = "stammtisch-photos-v1";
     const MAX_PHOTOS = 12;
     const MAX_PHOTO_EDGE = 960;
+    const DEFAULT_OFFICES = ["Richter", "Listenführer", "DJ", "Kassenwart", "Schriftführer", "Zeremonienmeister", "Bierwart"];
 
     let state = defaultState();
     let selectedMemberId = null;
@@ -971,7 +978,7 @@
     function defaultState() {
       const drinks = defaultDrinks();
       const names = ["Hias", "Sepp", "Franz", "Michi"];
-      const members = names.map((name) => ({ id: uid(), name }));
+      const members = names.map((name) => ({ id: uid(), name, offices: {} }));
       const session = newSession(todayISO(), members, drinks);
       return {
         members, drinks,
@@ -979,6 +986,8 @@
         extras: defaultExtras(),
         games: defaultGames(),
         events: [],
+        officeYear: String(new Date().getFullYear()),
+        officeCatalog: DEFAULT_OFFICES.slice(),
         sessions: [session],
         currentSessionId: session.id
       };
@@ -990,6 +999,11 @@
         raw.games = raw.games || defaultGames();
         raw.events = Array.isArray(raw.events) ? raw.events : [];
         raw.drinks = (raw.drinks || []).map(normalizeDrink);
+        raw.officeYear = raw.officeYear || String(new Date().getFullYear());
+        raw.officeCatalog = Array.isArray(raw.officeCatalog) && raw.officeCatalog.length ? raw.officeCatalog : DEFAULT_OFFICES.slice();
+        (raw.members || []).forEach((m) => {
+          m.offices = m.offices && typeof m.offices === "object" ? m.offices : {};
+        });
         raw.sessions.forEach((s) => {
           s.photos = Array.isArray(s.photos) ? s.photos : [];
           s.entries.forEach((e) => {
@@ -1005,7 +1019,7 @@
         return raw;
       }
       const drinks = (raw.drinks?.length ? raw.drinks : defaultDrinks()).map(normalizeDrink);
-      const members = (raw.members || []).map((m) => ({ id: m.id || uid(), name: m.name }));
+      const members = (raw.members || []).map((m) => ({ id: m.id || uid(), name: m.name, offices: m.offices && typeof m.offices === "object" ? m.offices : {} }));
       const session = newSession(todayISO(), members, drinks);
       session.entries.forEach((e) => {
         const old = (raw.members || []).find((m) => m.id === e.memberId) || {};
@@ -1019,6 +1033,8 @@
         extras: defaultExtras(),
         games: defaultGames(),
         events: Array.isArray(raw.events) ? raw.events : [],
+        officeYear: raw.officeYear || String(new Date().getFullYear()),
+        officeCatalog: Array.isArray(raw.officeCatalog) && raw.officeCatalog.length ? raw.officeCatalog : DEFAULT_OFFICES.slice(),
         sessions: [session],
         currentSessionId: session.id
       };
@@ -1287,6 +1303,25 @@
       return Number.isFinite(amount) && amount >= 0 ? amount : 0;
     }
     function memberById(id) { return state.members.find((m) => m.id === id); }
+    function officeYear() {
+      return String(state.officeYear || new Date().getFullYear());
+    }
+    function officeOf(member, year) {
+      if (!member || !member.offices) return "";
+      return member.offices[String(year || officeYear())] || "";
+    }
+    function officeList() {
+      const used = new Set(DEFAULT_OFFICES.concat(state.officeCatalog || []));
+      (state.members || []).forEach((m) => {
+        Object.values(m.offices || {}).forEach((amt) => { if (amt) used.add(amt); });
+      });
+      return [...used].sort((a, b) => a.localeCompare(b, "de"));
+    }
+    function officeYears() {
+      const years = new Set([String(new Date().getFullYear()), String(new Date().getFullYear() + 1), officeYear()]);
+      (state.members || []).forEach((m) => Object.keys(m.offices || {}).forEach((y) => years.add(String(y))));
+      return [...years].sort((a, b) => Number(b) - Number(a));
+    }
     function drinkById(id) { return state.drinks.find((d) => d.id === id); }
     function gameById(id) { return state.games.find((g) => g.id === id); }
     function sessionById(id) { return state.sessions.find((s) => s.id === id); }
@@ -1377,7 +1412,7 @@
       const input = document.getElementById("newMember");
       const name = input.value.trim();
       if (!name) return;
-      const member = { id: uid(), name };
+      const member = { id: uid(), name, offices: {} };
       state.members.push(member);
       const session = currentSession();
       if (session && !isClosed(session)) entryOf(session, member.id);
@@ -1694,7 +1729,7 @@
               <div class="avatar">${initials(m.name)}</div>
               <div class="name-wrap">
                 <div class="member-name">${escapeHtml(m.name)}</div>
-                <div class="member-meta">${escapeHtml(summary)}</div>
+                <div class="member-meta">${officeOf(m) ? escapeHtml(officeOf(m)) + " · " : ""}${escapeHtml(summary)}</div>
                 <div class="member-meta">Getränke ${euro.format(b.drinks)}</div>
               </div>
             </div>
@@ -1731,7 +1766,7 @@
       }
       if (!selectedMemberId) selectedMemberId = state.members[0].id;
       document.getElementById("fineWho").innerHTML = state.members.map((m) => `
-        <button class="chip ${m.id === selectedMemberId ? "on" : ""}" type="button" data-select="${m.id}">${escapeHtml(m.name)}</button>
+        <button class="chip ${m.id === selectedMemberId ? "on" : ""}" type="button" data-select="${m.id}">${escapeHtml(m.name)}${officeOf(m) ? " · " + escapeHtml(officeOf(m)) : ""}</button>
       `).join("");
 
       document.getElementById("fineAssign").innerHTML = state.catalog.length ? `
@@ -1835,7 +1870,7 @@
           <div>
             <div class="kicker">Bierkönig ${new Date().getFullYear()}</div>
             <div class="member-name">${escapeHtml(king.name)}</div>
-            <div class="member-meta">${kingBeers} Bier · ${totalBeers ? Math.round((kingBeers / totalBeers) * 100) : 0}% im Jahr</div>
+            <div class="member-meta">${officeOf(king) ? escapeHtml(officeOf(king)) + " · " : ""}${kingBeers} Bier · ${totalBeers ? Math.round((kingBeers / totalBeers) * 100) : 0}% im Jahr</div>
           </div>
         </article>
       ` : `<p class="empty">Noch kein Bier in diesem Jahr.</p>`;
@@ -1846,7 +1881,7 @@
             <div class="place ${cls}">${i + 1}</div>
             <div>
               <div class="member-name">${escapeHtml(m.name)}</div>
-              <div class="member-meta">${yearDrinks(m.id)} Getränke im Jahr</div>
+              <div class="member-meta">${officeOf(m) ? escapeHtml(officeOf(m)) + " · " : ""}${yearDrinks(m.id)} Getränke im Jahr</div>
             </div>
             <div class="rank-num">${yearBeer(m.id)}</div>
           </article>
@@ -1995,16 +2030,43 @@
         `;
       }).join("");
 
+      const yearSel = document.getElementById("officeYear");
+      if (yearSel) {
+        const current = officeYear();
+        yearSel.innerHTML = officeYears().map((y) => `<option value="${y}" ${y === current ? "selected" : ""}>${y}</option>`).join("");
+      }
+      const officeOpts = document.getElementById("officeOptions");
+      if (officeOpts) {
+        officeOpts.innerHTML = officeList().map((amt) => `<option value="${escapeHtml(amt)}"></option>`).join("");
+      }
+      const year = officeYear();
+      const missing = (state.members || []).filter((m) => !officeOf(m, year));
+      const officeCounts = {};
+      (state.members || []).forEach((m) => {
+        const amt = officeOf(m, year);
+        if (amt) officeCounts[amt] = (officeCounts[amt] || 0) + 1;
+      });
+      const dups = Object.keys(officeCounts).filter((amt) => officeCounts[amt] > 1);
+      const notes = [];
+      if (missing.length) notes.push(`${missing.length} Mitglied${missing.length === 1 ? " hat" : "er haben"} in ${year} noch kein Amt.`);
+      if (dups.length) notes.push(`Doppelt vergeben: ${dups.join(", ")}.`);
       document.getElementById("memberAdmin").innerHTML = state.members.length
-        ? state.members.map((m) => `
-            <div class="admin-card admin-row">
-              <div>
-                <div class="member-name">${escapeHtml(m.name)}</div>
-                <div class="member-meta">${yearDrinks(m.id)} Getränke im Jahr</div>
+        ? `${notes.length ? `<div class="banner warn" style="margin-bottom:12px">${notes.join(" ")}</div>` : ""}`
+          ${state.members.map((m) => `
+            <div class="admin-card">
+              <div class="admin-row">
+                <div>
+                  <div class="member-name">${escapeHtml(m.name)}</div>
+                  <div class="member-meta">${yearDrinks(m.id)} Getränke im Jahr</div>
+                </div>
+                <button class="tiny danger" type="button" data-remove-member="${m.id}">Löschen</button>
               </div>
-              <button class="tiny danger" type="button" data-remove-member="${m.id}">Löschen</button>
+              <div class="field" style="margin-top:12px">
+                <label for="office-${m.id}">Amt ${year}</label>
+                <input id="office-${m.id}" list="officeOptions" data-office-member="${m.id}" type="text" maxlength="32" placeholder="z. B. Richter, Listenführer, DJ…" value="${escapeHtml(officeOf(m, year))}" />
+              </div>
             </div>
-          `).join("")
+          `).join("")}`
         : `<p class="empty">Noch keine Mitglieder.</p>`;
 
       document.getElementById("drinkAdmin").innerHTML = state.drinks.length
@@ -2116,6 +2178,30 @@
     document.getElementById("sessionSelect").addEventListener("change", (event) => {
       state.currentSessionId = event.target.value;
       save(); render();
+    });
+    document.body.addEventListener("change", (event) => {
+      if (event.target.id === "officeYear") {
+        state.officeYear = event.target.value;
+        save(); render();
+        return;
+      }
+      const officeIn = event.target.closest("[data-office-member]");
+      if (!officeIn) return;
+      const member = memberById(officeIn.dataset.officeMember);
+      if (!member) return;
+      member.offices = member.offices || {};
+      const year = officeYear();
+      const amt = officeIn.value.trim();
+      if (amt) {
+        member.offices[year] = amt;
+        if (!(state.officeCatalog || []).includes(amt)) {
+          state.officeCatalog = (state.officeCatalog || []).concat(amt);
+        }
+      } else {
+        delete member.offices[year];
+      }
+      save();
+      render();
     });
 
     document.body.addEventListener("click", (event) => {
