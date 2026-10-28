@@ -395,6 +395,7 @@
           <h2 class="section-title">Gemeinsame Cloud</h2>
           <p class="member-meta" style="margin-bottom:10px">Alle Geräte lesen und schreiben denselben Live-Stand.</p>
           <div class="banner" id="cloudInfo">Verbinde…</div>
+          <button class="primary full" type="button" id="forceSync">Jetzt synchronisieren</button>
         </div>
       </div>
     </section>
@@ -430,6 +431,7 @@
     let cloudStatus = "wait";
     let cloudNote = "Verbinde mit der Cloud…";
     let pushing = false;
+    let pushQueued = false;
     let dirty = false;
     let saveTimer = null;
 
@@ -563,9 +565,13 @@
       return copy;
     }
 
+    function remoteLooksValid(doc) {
+      return !!(doc && Array.isArray(doc.members) && doc.members.length && Array.isArray(doc.sessions));
+    }
+
     async function pullCloud() {
       const res = await fetch(CLOUD_URL, { cache: "no-store" });
-      if (!res.ok) throw new Error("Cloud-Lesen fehlgeschlagen");
+      if (!res.ok) throw new Error("Lesen " + res.status);
       const doc = await res.json();
       if (!doc || typeof doc !== "object") return null;
       delete doc._id;
@@ -573,31 +579,46 @@
     }
 
     async function pushCloud() {
-      if (pushing) return;
+      if (pushing) {
+        pushQueued = true;
+        return;
+      }
       pushing = true;
       try {
         const body = JSON.stringify(cloudPayload());
         const res = await fetch(CLOUD_URL, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
+          cache: "no-store",
           body
         });
-        if (!res.ok) throw new Error("Cloud-Schreiben fehlgeschlagen");
+        if (!res.ok) throw new Error("Schreiben " + res.status);
         dirty = false;
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
         setCloudStatus("ok", "Live – alle sehen denselben Stand.");
-      } catch (_) {
-        setCloudStatus("err", "Cloud gerade nicht erreichbar. Lokal zwischengespeichert.");
+      } catch (err) {
+        setCloudStatus("err", "Cloud-Fehler: " + (err && err.message ? err.message : "unbekannt"));
       } finally {
         pushing = false;
+        if (pushQueued) {
+          pushQueued = false;
+          pushCloud();
+        }
       }
     }
 
     async function syncCloud() {
-      if (pushing || dirty) return;
+      if (dirty) {
+        await pushCloud();
+        return;
+      }
+      if (pushing) return;
       try {
         const remote = await pullCloud();
-        if (!remote || !remote.members) return;
+        if (!remoteLooksValid(remote)) {
+          setCloudStatus("ok", "Live – alle sehen denselben Stand.");
+          return;
+        }
         const remoteAt = Number(remote.updatedAt || 0);
         const localAt = Number(state.updatedAt || 0);
         if (remoteAt <= localAt) {
@@ -611,8 +632,8 @@
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
         render();
         setCloudStatus("ok", "Live – Stand von anderem Gerät übernommen.");
-      } catch (_) {
-        setCloudStatus("err", "Cloud-Abgleich fehlgeschlagen.");
+      } catch (err) {
+        setCloudStatus("err", "Cloud-Abgleich fehlgeschlagen: " + (err && err.message ? err.message : ""));
       }
     }
 
@@ -632,25 +653,27 @@
       const local = load();
       try {
         const remote = await pullCloud();
-        if (remote && remote.members && Number(remote.updatedAt || 0) > 0) {
+        if (remoteLooksValid(remote)) {
           state = migrate(remote);
           setCloudStatus("ok", "Live aus der Cloud geladen.");
         } else {
           state = local;
           state.updatedAt = Date.now();
+          dirty = true;
           await pushCloud();
         }
-      } catch (_) {
+      } catch (err) {
         state = local;
-        setCloudStatus("err", "Cloud nicht erreichbar – Offline-Stand.");
+        setCloudStatus("err", "Cloud nicht erreichbar – Offline-Stand. " + (err && err.message ? err.message : ""));
       }
       selectedMemberId = state.members[0]?.id || null;
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
       render();
-      setInterval(syncCloud, 4000);
+      setInterval(syncCloud, 2500);
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) syncCloud();
       });
+      window.addEventListener("online", () => syncCloud());
     }
 
     function parseMoney(value) {
@@ -1360,6 +1383,12 @@
       if (event.target.closest("#assignExtra")) { assignItem("extra"); return; }
       if (event.target.closest("#addMember")) { addMember(); return; }
       if (event.target.closest("#startSession")) { startOrOpenSession(); return; }
+      if (event.target.closest("#forceSync")) {
+        dirty = true;
+        state.updatedAt = Date.now();
+        pushCloud().then(() => syncCloud());
+        return;
+      }
       if (event.target.closest("#saveDrink")) { saveNamed("drink"); return; }
       if (event.target.closest("#cancelDrink")) { resetDrinkForm(); return; }
       if (event.target.closest("#saveFineDef")) { saveNamed("fine"); return; }
@@ -1442,7 +1471,7 @@
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js").catch(() => {});
+        navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
       });
     }
   </script>
