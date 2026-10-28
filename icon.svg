@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Stammtisch">
+  <rect width="512" height="512" rx="96" fill="#0b0b0d"/>
+  <path fill="#2a2216" d="M256 70l150 48v92c0 92-64 168-150 196C170 378 106 302 106 210v-92z"/>
+  <path fill="#c07a4a" d="M256 92l128 40v78c0 78-54 142-128 166-74-24-128-88-128-166v-78z"/>
+  <rect x="176" y="168" width="140" height="188" rx="18" fill="#1a1308" stroke="#e8c478" stroke-width="14"/>
+  <path fill="#d9923b" d="M190 250h112v92c0 18-14 32-32 32h-48c-18 0-32-14-32-32z"/>
+  <path fill="#f6f1e6" d="M190 214c10-22 28-32 56-32s46 10 56 32v44H190z"/>
+  <path fill="none" stroke="#e8c478" stroke-width="14" stroke-linecap="round" d="M316 214c36 4 58 28 54 62-4 32-28 52-62 54"/>
+  <circle cx="214" cy="206" r="8" fill="#fff6e8"/>
+  <circle cx="248" cy="196" r="10" fill="#fff6e8"/>
+  <circle cx="278" cy="210" r="7" fill="#fff6e8"/>
+</svg>

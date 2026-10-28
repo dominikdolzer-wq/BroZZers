@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0b0d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Stammtisch" />
+  <meta name="application-name" content="Stammtisch" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+  <title>Stammtisch</title>
+  <style>
+    :root {
+      --bg: #0b0b0d;
+      --bg-card: #1b1b20;
+      --bg-soft: #222228;
+      --line: rgba(232, 196, 120, 0.14);
+      --text: #f6f1e6;
+      --muted: #b7ad9c;
+      --gold: #e8c478;
+      --gold-2: #f0d9a0;
+      --amber: #d9923b;
+      --danger: #e07a5f;
+      --ok: #8fbf7a;
+      --shadow: 0 18px 40px rgba(0, 0, 0, 0.38);
+      --radius: 22px;
+      --nav-h: 82px;
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-t: env(safe-area-inset-top, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    body {
+      max-width: 480px;
+      margin: 0 auto;
+      background:
+        radial-gradient(900px 420px at 10% -8%, rgba(217, 146, 59, 0.18), transparent 50%),
+        radial-gradient(700px 380px at 110% 0%, rgba(232, 196, 120, 0.12), transparent 46%),
+        var(--bg);
+      padding-bottom: calc(var(--nav-h) + var(--safe-b) + 16px);
+    }
+    button, input, select { font: inherit; color: inherit; }
+    button { cursor: pointer; touch-action: manipulation; }
+    .app-header {
+      padding: calc(18px + var(--safe-t)) 18px 12px;
+      position: sticky; top: 0; z-index: 5;
+      background: linear-gradient(180deg, rgba(11, 11, 13, 0.96), rgba(11, 11, 13, 0.78) 70%, transparent);
+      backdrop-filter: blur(10px);
+    }
+    .kicker { color: var(--gold); letter-spacing: 0.16em; text-transform: uppercase; font-size: 0.72rem; font-weight: 700; margin-bottom: 6px; }
+    h1 { font-size: 1.72rem; letter-spacing: -0.03em; line-height: 1.1; }
+    .sub { color: var(--muted); margin-top: 6px; font-size: 0.95rem; }
+    main { padding: 6px 16px 24px; }
+    .panel[hidden] { display: none !important; }
+    .panel.active { display: block; }
+    .member-card, .stat-card, .rank-card, .penalty-item, .admin-card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .member-card, .admin-card { padding: 16px; margin-bottom: 14px; }
+    .member-top, .admin-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .member-top { margin-bottom: 14px; }
+    .avatar {
+      width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center;
+      font-weight: 800; color: #1a1308; background: linear-gradient(160deg, var(--gold-2), var(--amber)); flex-shrink: 0;
+    }
+    .member-name { font-size: 1.2rem; font-weight: 700; }
+    .member-meta { color: var(--muted); font-size: 0.85rem; }
+    .name-wrap { flex: 1; min-width: 0; }
+    .ghost { background: transparent; border: 0; color: var(--muted); padding: 8px; min-width: 44px; min-height: 44px; }
+    .counters { display: grid; gap: 10px; }
+    .counter {
+      background: rgba(0,0,0,0.28); border: 1px solid var(--line); border-radius: 16px;
+      padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .counter-label { font-size: 0.82rem; color: var(--muted); }
+    .counter-value { font-size: 1.85rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--gold); line-height: 1; text-align: center; }
+    .stepper { display: grid; grid-template-columns: 64px 1fr 64px; align-items: center; gap: 8px; }
+    .step {
+      width: 64px; height: 56px; border-radius: 16px; border: 1px solid var(--line);
+      background: var(--bg-soft); font-size: 1.7rem; font-weight: 700; line-height: 1;
+    }
+    .step.plus { background: linear-gradient(160deg, var(--gold), var(--amber)); color: #1a1308; border-color: transparent; }
+    .step:disabled, .primary:disabled { opacity: 0.4; }
+    .step:active { transform: scale(0.96); }
+    .add-row, .form-grid { display: grid; gap: 8px; }
+    .add-row.inline { grid-template-columns: 1fr auto; }
+    input, select {
+      width: 100%; min-height: 54px; border-radius: 16px; border: 1px solid var(--line);
+      background: var(--bg-card); padding: 0 16px;
+    }
+    .price-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .field label { display: block; color: var(--muted); font-size: 0.78rem; margin-bottom: 6px; }
+    .check { display: flex; align-items: center; gap: 10px; min-height: 48px; color: var(--muted); }
+    .check input { width: 22px; height: 22px; min-height: 22px; accent-color: var(--amber); }
+    .add-row button, .primary, .chip {
+      min-height: 54px; border-radius: 16px; border: 0;
+      background: linear-gradient(160deg, var(--gold), var(--amber)); color: #1a1308; font-weight: 800; padding: 0 16px;
+    }
+    .primary.full { width: 100%; margin-top: 8px; }
+    .primary.ghosted { background: var(--bg-soft); color: var(--text); border: 1px solid var(--line); }
+    .primary.ok { background: linear-gradient(160deg, #a8d48f, #6ea85a); color: #10200c; }
+    .section-title { margin: 8px 0 12px; font-size: 1.05rem; }
+    .admin-block { margin-bottom: 28px; }
+    .who { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 12px; -webkit-overflow-scrolling: touch; }
+    .chip { flex: 0 0 auto; background: var(--bg-soft); color: var(--text); border: 1px solid var(--line); font-weight: 700; padding: 0 16px; }
+    .chip.on { background: linear-gradient(160deg, var(--gold), var(--amber)); color: #1a1308; border-color: transparent; }
+    .penalty-item { padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .sum-row { display: flex; justify-content: space-between; padding: 14px 4px 6px; color: var(--gold-2); font-weight: 800; }
+    .rank-card { padding: 18px; margin-bottom: 12px; display: flex; align-items: center; gap: 14px; }
+    .rank-card.king { background: linear-gradient(135deg, rgba(232,196,120,0.2), rgba(217,146,59,0.08)); border-color: rgba(232,196,120,0.4); }
+    .place { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--bg-soft); }
+    .place.gold { background: var(--gold); color: #1a1308; }
+    .place.silver { background: #c9cdd3; color: #1a1308; }
+    .place.bronze { background: #c07a4a; color: #1a1308; }
+    .rank-num { margin-left: auto; font-size: 1.5rem; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
+    .crown { font-size: 1.6rem; }
+    .stats-grid { display: grid; gap: 10px; margin-bottom: 16px; }
+    .stat-card { padding: 16px; }
+    .stat-card small { color: var(--muted); display: block; margin-bottom: 4px; }
+    .stat-card b { font-size: 1.2rem; color: var(--gold-2); }
+    .chart-wrap { background: var(--bg-card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+    .chart-wrap h3 { margin-bottom: 12px; font-size: 1rem; }
+    .pie-layout { display: grid; justify-items: center; gap: 14px; }
+    svg.pie { width: min(240px, 72vw); height: auto; }
+    .legend { width: 100%; display: grid; gap: 8px; }
+    .legend-row { display: flex; align-items: center; gap: 10px; font-size: 0.95rem; }
+    .swatch { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+    .legend-row span:last-child { margin-left: auto; color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .empty { color: var(--muted); text-align: center; padding: 28px 12px; }
+    .admin-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .tiny { min-height: 44px; min-width: 44px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg-soft); color: var(--text); font-weight: 700; padding: 0 10px; }
+    .tiny.danger { color: var(--danger); border-color: rgba(224, 122, 95, 0.4); }
+    .banner {
+      border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; margin-bottom: 14px;
+      color: var(--muted); font-size: 0.88rem; background: rgba(0,0,0,0.22);
+    }
+    .banner strong { color: var(--gold-2); }
+    .paid-card { border-color: rgba(143, 191, 122, 0.45); }
+    .break-row { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 0.88rem; padding: 3px 0; }
+    .debt { font-size: 1.35rem; font-weight: 800; color: var(--gold); }
+    .ok-text { color: var(--ok); font-weight: 700; }
+    .warn { color: var(--danger); }
+    .year-block {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      margin-bottom: 12px;
+      background: rgba(0,0,0,0.18);
+    }
+    .year-head {
+      width: 100%;
+      min-height: 64px;
+      border: 0;
+      background: var(--bg-soft);
+      color: inherit;
+      text-align: left;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .year-head .chev { color: var(--gold); font-size: 1.1rem; }
+    .month-compact {
+      width: 100%;
+      border: 0;
+      border-top: 1px solid var(--line);
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      padding: 14px 16px;
+    }
+    .month-compact.on { background: rgba(232, 196, 120, 0.08); }
+    .month-compact .nums {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 800;
+      color: var(--gold-2);
+      margin: 4px 0 6px;
+    }
+    nav.tabs {
+      position: fixed; left: 50%; transform: translateX(-50%); width: min(480px, 100%);
+      bottom: 0; height: calc(var(--nav-h) + var(--safe-b)); padding: 8px 4px var(--safe-b);
+      display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px;
+      background: rgba(15, 15, 18, 0.94); border-top: 1px solid var(--line); backdrop-filter: blur(16px); z-index: 10;
+    }
+    .tab {
+      border: 0; background: transparent; color: var(--muted); border-radius: 14px;
+      font-size: 0.62rem; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    }
+    .tab .ico { font-size: 1.2rem; }
+    .tab.on { color: var(--gold); background: rgba(232, 196, 120, 0.1); }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <p class="kicker">Stammtisch</p>
+    <h1 id="title">Getränke</h1>
+    <p class="sub" id="subtitle">Zähler für den gewählten Stammtisch-Abend.</p>
+    <select id="sessionSelect" aria-label="Stammtisch-Monat" style="margin-top:12px"></select>
+  </header>
+
+  <main>
+    <section id="panel-drinks" class="panel active">
+      <div id="sessionHint"></div>
+      <div id="drinkList"></div>
+    </section>
+
+    <section id="panel-fines" class="panel" hidden>
+      <h2 class="section-title">Mitglied</h2>
+      <div class="who" id="fineWho"></div>
+      <h2 class="section-title">Strafe</h2>
+      <div class="form-grid" id="fineAssign"></div>
+      <h2 class="section-title">Sonderzahlung</h2>
+      <div class="form-grid" id="extraAssign"></div>
+      <h2 class="section-title">Tischspiele</h2>
+      <div id="gameAssign"></div>
+      <h2 class="section-title">Konto dieses Abends</h2>
+      <div id="fineLedger"></div>
+    </section>
+
+    <section id="panel-beer" class="panel" hidden>
+      <div id="beerKing"></div>
+      <div id="beerRanks"></div>
+    </section>
+
+    <section id="panel-stats" class="panel" hidden>
+      <h2 class="section-title">Vergangene Stammtische</h2>
+      <p class="member-meta" style="margin:-4px 0 12px">Nach Jahr aufklappen. Monat antippen, um Zahlen nachzutragen.</p>
+      <div id="historyList"></div>
+      <h2 class="section-title">Gewählter Abend</h2>
+      <div id="settleIntro"></div>
+      <div class="stats-grid" id="highlights"></div>
+      <div id="settleList"></div>
+      <div class="chart-wrap">
+        <h3>Schulden nach Person</h3>
+        <div class="pie-layout">
+          <div id="piePeople"></div>
+          <div class="legend" id="legendPeople"></div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <h3>Zusammensetzung der Kasse</h3>
+        <div class="pie-layout">
+          <div id="pieKinds"></div>
+          <div class="legend" id="legendKinds"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-admin" class="panel" hidden>
+      <div class="admin-block">
+        <h2 class="section-title">Monatlicher Stammtisch</h2>
+        <p class="member-meta" style="margin-bottom:10px">Ein Abend pro Monat. Vergangene Monate 2026 kannst du rückwirkend anlegen: Datum wählen, anlegen, dann Getränke und Beträge eintragen. Der aktuelle Monat bleibt dabei offen.</p>
+        <div class="form-grid">
+          <div class="field">
+            <label for="sessionDate">Datum des Abends</label>
+            <input id="sessionDate" type="date" />
+          </div>
+          <button class="primary" type="button" id="startSession">Monat anlegen oder öffnen</button>
+        </div>
+        <div id="sessionAdmin" style="margin-top:12px"></div>
+      </div>
+
+      <div class="admin-block">
+        <h2 class="section-title">Mitglieder</h2>
+        <div class="add-row inline">
+          <input id="newMember" type="text" placeholder="Vorname…" maxlength="24" />
+          <button type="button" id="addMember">Hinzu</button>
+        </div>
+        <div id="memberAdmin" style="margin-top:12px"></div>
+      </div>
+
+      <div class="admin-block">
+        <h2 class="section-title">Getränkearten</h2>
+        <div class="form-grid">
+          <input id="drinkName" type="text" placeholder="z. B. Helles" maxlength="24" />
+          <div class="price-row">
+            <div class="field">
+              <label for="drinkBuy">Einkaufspreis €</label>
+              <input id="drinkBuy" type="number" min="0" step="0.01" inputmode="decimal" placeholder="3,80" />
+            </div>
+            <div class="field">
+              <label for="drinkShare">Kassenanteil €</label>
+              <input id="drinkShare" type="number" min="0" step="0.01" inputmode="decimal" placeholder="2,00" />
+            </div>
+          </div>
+          <label class="check"><input id="drinkKing" type="checkbox" checked /> Zählt für den Bierkönig</label>
+          <button class="primary" type="button" id="saveDrink">Getränk speichern</button>
+          <button class="primary ghosted" type="button" id="cancelDrink" hidden>Abbrechen</button>
+        </div>
+        <div id="drinkAdmin" style="margin-top:12px"></div>
+      </div>
+
+      <div class="admin-block">
+        <h2 class="section-title">Strafenkatalog</h2>
+        <div class="form-grid">
+          <input id="fineName" type="text" placeholder="z. B. Zu spät" maxlength="32" />
+          <div class="field">
+            <label for="fineAmount">Betrag €</label>
+            <input id="fineAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="2,00" />
+          </div>
+          <button class="primary" type="button" id="saveFineDef">Strafe speichern</button>
+          <button class="primary ghosted" type="button" id="cancelFineDef" hidden>Abbrechen</button>
+        </div>
+        <div id="fineAdmin" style="margin-top:12px"></div>
+      </div>
+
+      <div class="admin-block">
+        <h2 class="section-title">Sonderzahlungen</h2>
+        <div class="form-grid">
+          <input id="extraName" type="text" placeholder="z. B. Geburtstag" maxlength="32" />
+          <div class="field">
+            <label for="extraAmount">Betrag €</label>
+            <input id="extraAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="10,00" />
+          </div>
+          <button class="primary" type="button" id="saveExtraDef">Sonderzahlung speichern</button>
+          <button class="primary ghosted" type="button" id="cancelExtraDef" hidden>Abbrechen</button>
+        </div>
+        <div id="extraAdmin" style="margin-top:12px"></div>
+      </div>
+
+      <div class="admin-block">
+        <h2 class="section-title">Tischspiele</h2>
+        <div class="form-grid">
+          <input id="gameName" type="text" placeholder="z. B. Schafkopf verloren" maxlength="32" />
+          <div class="field">
+            <label for="gameAmount">Betrag je Runde €</label>
+            <input id="gameAmount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0,50" />
+          </div>
+          <button class="primary" type="button" id="saveGameDef">Spiel speichern</button>
+          <button class="primary ghosted" type="button" id="cancelGameDef" hidden>Abbrechen</button>
+        </div>
+        <div id="gameAdmin" style="margin-top:12px"></div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Bereiche">
+    <button class="tab on" data-tab="drinks"><span class="ico">🍺</span>Getränke</button>
+    <button class="tab" data-tab="fines"><span class="ico">⚖️</span>Abend</button>
+    <button class="tab" data-tab="beer"><span class="ico">👑</span>König</button>
+    <button class="tab" data-tab="stats"><span class="ico">💶</span>Konto</button>
+    <button class="tab" data-tab="admin"><span class="ico">⚙️</span>Verwalten</button>
+  </nav>
+
+  <script>
+    const STORAGE_KEY = "stammtisch-v3";
+    const LEGACY_KEYS = ["stammtisch-v2", "stammtisch-v1"];
+    const COLORS = ["#e8c478", "#d9923b", "#f0d9a0", "#c07a4a", "#8fbf7a", "#7aa7c7", "#e07a5f", "#c9a0dc"];
+    const euro = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+    const monthFmt = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
+    const titles = {
+      drinks: ["Getränke", "Zähler für den gewählten Stammtisch-Abend."],
+      fines: ["Abendkonto", "Strafen, Geburtstag und Tischspiele."],
+      beer: ["Bier-Wertung", "Über alle Monate des Jahres."],
+      stats: ["Monatskonto", "Was jeder bis zum nächsten Stammtisch überweist."],
+      admin: ["Verwaltung", "Monate, Mitglieder und Kataloge."]
+    };
+
+    let state = load();
+    let selectedMemberId = state.members[0]?.id || null;
+    let editing = { drink: null, fine: null, extra: null, game: null };
+    let openYears = new Set([String(new Date().getFullYear())]);
+
+    function uid() { return Math.random().toString(36).slice(2, 9); }
+    function todayISO() { return new Date().toISOString().slice(0, 10); }
+    function monthKey(date) { return String(date).slice(0, 7); }
+    function monthLabel(date) {
+      const [y, m] = monthKey(date).split("-").map(Number);
+      return monthFmt.format(new Date(y, m - 1, 1));
+    }
+
+    function defaultDrinks() {
+      return [
+        { id: uid(), name: "Helles", buy: 3.8, share: 2, forKing: true },
+        { id: uid(), name: "Weißbier", buy: 4.2, share: 2, forKing: true },
+        { id: uid(), name: "Schnaps", buy: 1.5, share: 1, forKing: false }
+      ];
+    }
+    function defaultCatalog() {
+      return [
+        { id: uid(), label: "Zu spät kommen", amount: 2 },
+        { id: uid(), label: "Handy am Tisch", amount: 1 },
+        { id: uid(), label: "Bier verschüttet", amount: 5 }
+      ];
+    }
+    function defaultExtras() { return [{ id: uid(), label: "Geburtstag", amount: 10 }]; }
+    function defaultGames() {
+      return [
+        { id: uid(), name: "Schafkopf verloren", amount: 0.5 },
+        { id: uid(), name: "Verlorene Runde", amount: 1 }
+      ];
+    }
+    function emptyDrinksMap(drinks) {
+      return Object.fromEntries((drinks || []).map((d) => [d.id, 0]));
+    }
+
+    function newEntry(member, drinks) {
+      return {
+        memberId: member.id,
+        name: member.name,
+        drinks: emptyDrinksMap(drinks),
+        fines: [],
+        extras: [],
+        games: {},
+        paid: false,
+        paidAt: null
+      };
+    }
+
+    function newSession(date, members, drinks) {
+      return {
+        id: uid(),
+        date,
+        month: monthKey(date),
+        label: monthLabel(date),
+        closed: false,
+        entries: members.map((m) => newEntry(m, drinks))
+      };
+    }
+
+    function defaultState() {
+      const drinks = defaultDrinks();
+      const names = ["Hias", "Sepp", "Franz", "Michi"];
+      const members = names.map((name) => ({ id: uid(), name }));
+      const session = newSession(todayISO(), members, drinks);
+      return {
+        members, drinks,
+        catalog: defaultCatalog(),
+        extras: defaultExtras(),
+        games: defaultGames(),
+        sessions: [session],
+        currentSessionId: session.id
+      };
+    }
+
+    function migrate(raw) {
+      if (raw.sessions && raw.members) {
+        raw.extras = raw.extras || defaultExtras();
+        raw.games = raw.games || defaultGames();
+        raw.sessions.forEach((s) => {
+          s.entries.forEach((e) => {
+            e.fines = e.fines || [];
+            e.extras = e.extras || [];
+            e.games = e.games || {};
+            e.drinks = e.drinks || {};
+            (raw.drinks || []).forEach((d) => { if (e.drinks[d.id] == null) e.drinks[d.id] = 0; });
+          });
+        });
+        if (!raw.currentSessionId) raw.currentSessionId = raw.sessions[raw.sessions.length - 1]?.id;
+        return raw;
+      }
+      const drinks = raw.drinks?.length ? raw.drinks : defaultDrinks();
+      const members = (raw.members || []).map((m) => ({ id: m.id || uid(), name: m.name }));
+      const session = newSession(todayISO(), members, drinks);
+      session.entries.forEach((e) => {
+        const old = (raw.members || []).find((m) => m.id === e.memberId) || {};
+        e.drinks = { ...emptyDrinksMap(drinks), ...(old.drinks || {}) };
+        if (old.beer && drinks[0]) e.drinks[drinks[0].id] = (e.drinks[drinks[0].id] || 0) + old.beer;
+        e.fines = old.fines || [];
+      });
+      return {
+        members, drinks,
+        catalog: raw.catalog || defaultCatalog(),
+        extras: defaultExtras(),
+        games: defaultGames(),
+        sessions: [session],
+        currentSessionId: session.id
+      };
+    }
+
+    function load() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY) || LEGACY_KEYS.map((k) => localStorage.getItem(k)).find(Boolean);
+        if (!raw) return defaultState();
+        return migrate(JSON.parse(raw));
+      } catch { return defaultState(); }
+    }
+    function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+    function parseMoney(value) {
+      const amount = Number.parseFloat(String(value).replace(",", "."));
+      return Number.isFinite(amount) && amount >= 0 ? amount : 0;
+    }
+    function memberById(id) { return state.members.find((m) => m.id === id); }
+    function drinkById(id) { return state.drinks.find((d) => d.id === id); }
+    function gameById(id) { return state.games.find((g) => g.id === id); }
+    function sessionById(id) { return state.sessions.find((s) => s.id === id); }
+    function currentSession() { return sessionById(state.currentSessionId) || state.sessions[0]; }
+    function isClosed(session) { return !!session.closed; }
+
+    function entryOf(session, memberId) {
+      let entry = session.entries.find((e) => e.memberId === memberId);
+      if (!entry) {
+        const member = memberById(memberId);
+        if (!member) return null;
+        entry = newEntry(member, state.drinks);
+        session.entries.push(entry);
+      }
+      entry.name = memberById(memberId)?.name || entry.name;
+      return entry;
+    }
+
+    function drinkCountOf(entry, drinkId) { return entry.drinks[drinkId] || 0; }
+    function drinkCount(entry) { return state.drinks.reduce((sum, d) => sum + drinkCountOf(entry, d.id), 0); }
+    function beerCount(entry) {
+      return state.drinks.reduce((sum, d) => sum + (d.forKing ? drinkCountOf(entry, d.id) : 0), 0);
+    }
+    function unitPrice(drink) { return drink.buy + drink.share; }
+    function drinksEuro(entry) {
+      return state.drinks.reduce((sum, d) => sum + drinkCountOf(entry, d.id) * unitPrice(d), 0);
+    }
+    function tillShare(entry) {
+      return state.drinks.reduce((sum, d) => sum + drinkCountOf(entry, d.id) * d.share, 0);
+    }
+    function listSum(list) { return (list || []).reduce((sum, item) => sum + item.amount, 0); }
+    function gamesEuro(entry) {
+      return state.games.reduce((sum, g) => sum + (entry.games[g.id] || 0) * g.amount, 0);
+    }
+    function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+    function breakdown(entry) {
+      const drinks = round2(drinksEuro(entry));
+      const fines = round2(listSum(entry.fines));
+      const extras = round2(listSum(entry.extras));
+      const games = round2(gamesEuro(entry));
+      return { drinks, fines, extras, games, total: round2(drinks + fines + extras + games) };
+    }
+    function sessionTotals(session) {
+      return session.entries.reduce((acc, e) => {
+        const b = breakdown(e);
+        acc.drinks += b.drinks; acc.fines += b.fines; acc.extras += b.extras;
+        acc.games += b.games; acc.total += b.total;
+        acc.open += e.paid ? 0 : b.total;
+        acc.glasses += drinkCount(e);
+        return acc;
+      }, { drinks: 0, fines: 0, extras: 0, games: 0, total: 0, open: 0, glasses: 0 });
+    }
+    function yearBeer(memberId) {
+      const year = new Date().getFullYear();
+      return state.sessions
+        .filter((s) => Number(s.month.slice(0, 4)) === year)
+        .reduce((sum, s) => {
+          const e = s.entries.find((x) => x.memberId === memberId);
+          return sum + (e ? beerCount(e) : 0);
+        }, 0);
+    }
+    function yearDrinks(memberId) {
+      const year = new Date().getFullYear();
+      return state.sessions
+        .filter((s) => Number(s.month.slice(0, 4)) === year)
+        .reduce((sum, s) => {
+          const e = s.entries.find((x) => x.memberId === memberId);
+          return sum + (e ? drinkCount(e) : 0);
+        }, 0);
+    }
+    function initials(name) { return name.trim().slice(0, 2).toUpperCase(); }
+    function escapeHtml(value) {
+      return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function bump(memberId, drinkId, delta) {
+      const session = currentSession();
+      if (!session || !drinkById(drinkId)) return;
+      const entry = entryOf(session, memberId);
+      entry.drinks[drinkId] = Math.max(0, drinkCountOf(entry, drinkId) + delta);
+      save(); render();
+    }
+    function bumpGame(memberId, gameId, delta) {
+      const session = currentSession();
+      if (!session || !gameById(gameId)) return;
+      const entry = entryOf(session, memberId);
+      entry.games[gameId] = Math.max(0, (entry.games[gameId] || 0) + delta);
+      save(); render();
+    }
+
+    function addMember() {
+      const input = document.getElementById("newMember");
+      const name = input.value.trim();
+      if (!name) return;
+      const member = { id: uid(), name };
+      state.members.push(member);
+      const session = currentSession();
+      if (session && !isClosed(session)) entryOf(session, member.id);
+      selectedMemberId = member.id;
+      input.value = "";
+      save(); render();
+    }
+    function removeMember(id) {
+      if (!confirm("Mitglied wirklich entfernen? Vergangene Monate bleiben erhalten.")) return;
+      state.members = state.members.filter((m) => m.id !== id);
+      if (selectedMemberId === id) selectedMemberId = state.members[0]?.id || null;
+      save(); render();
+    }
+
+    function saveNamed(kind) {
+      const map = {
+        drink: { nameId: "drinkName", save: () => {
+          const name = document.getElementById("drinkName").value.trim();
+          if (!name) return;
+          const payload = {
+            name,
+            buy: parseMoney(document.getElementById("drinkBuy").value),
+            share: parseMoney(document.getElementById("drinkShare").value),
+            forKing: document.getElementById("drinkKing").checked
+          };
+          if (editing.drink) Object.assign(drinkById(editing.drink), payload);
+          else {
+            const drink = { id: uid(), ...payload };
+            state.drinks.push(drink);
+            state.sessions.forEach((s) => s.entries.forEach((e) => { if (e.drinks[drink.id] == null) e.drinks[drink.id] = 0; }));
+          }
+          resetDrinkForm();
+        }},
+        fine: { save: () => {
+          const label = document.getElementById("fineName").value.trim();
+          const amount = parseMoney(document.getElementById("fineAmount").value);
+          if (!label) return;
+          if (editing.fine) Object.assign(state.catalog.find((c) => c.id === editing.fine), { label, amount });
+          else state.catalog.push({ id: uid(), label, amount });
+          resetFineForm();
+        }},
+        extra: { save: () => {
+          const label = document.getElementById("extraName").value.trim();
+          const amount = parseMoney(document.getElementById("extraAmount").value);
+          if (!label) return;
+          if (editing.extra) Object.assign(state.extras.find((c) => c.id === editing.extra), { label, amount });
+          else state.extras.push({ id: uid(), label, amount });
+          resetExtraForm();
+        }},
+        game: { save: () => {
+          const name = document.getElementById("gameName").value.trim();
+          const amount = parseMoney(document.getElementById("gameAmount").value);
+          if (!name) return;
+          if (editing.game) Object.assign(gameById(editing.game), { name, amount });
+          else state.games.push({ id: uid(), name, amount });
+          resetGameForm();
+        }}
+      };
+      map[kind].save();
+      save(); render();
+    }
+
+    function resetDrinkForm() {
+      editing.drink = null;
+      document.getElementById("drinkName").value = "";
+      document.getElementById("drinkBuy").value = "";
+      document.getElementById("drinkShare").value = "";
+      document.getElementById("drinkKing").checked = true;
+      document.getElementById("saveDrink").textContent = "Getränk speichern";
+      document.getElementById("cancelDrink").hidden = true;
+    }
+    function resetFineForm() {
+      editing.fine = null;
+      document.getElementById("fineName").value = "";
+      document.getElementById("fineAmount").value = "";
+      document.getElementById("saveFineDef").textContent = "Strafe speichern";
+      document.getElementById("cancelFineDef").hidden = true;
+    }
+    function resetExtraForm() {
+      editing.extra = null;
+      document.getElementById("extraName").value = "";
+      document.getElementById("extraAmount").value = "";
+      document.getElementById("saveExtraDef").textContent = "Sonderzahlung speichern";
+      document.getElementById("cancelExtraDef").hidden = true;
+    }
+    function resetGameForm() {
+      editing.game = null;
+      document.getElementById("gameName").value = "";
+      document.getElementById("gameAmount").value = "";
+      document.getElementById("saveGameDef").textContent = "Spiel speichern";
+      document.getElementById("cancelGameDef").hidden = true;
+    }
+
+    function startOrOpenSession() {
+      const date = document.getElementById("sessionDate").value || todayISO();
+      const month = monthKey(date);
+      const existing = state.sessions.find((s) => s.month === month);
+      if (existing) {
+        state.currentSessionId = existing.id;
+        openYears.add(month.slice(0, 4));
+        save(); render();
+        return;
+      }
+      const latest = [...state.sessions].sort((a, b) => b.date.localeCompare(a.date))[0];
+      const isNext = latest && date > latest.date;
+      if (isNext) {
+        state.sessions.filter((s) => !s.closed).forEach((s) => { s.closed = true; });
+      }
+      const session = newSession(date, state.members, state.drinks);
+      if (!isNext) session.closed = true;
+      state.sessions.push(session);
+      state.sessions.sort((a, b) => a.date.localeCompare(b.date));
+      state.currentSessionId = session.id;
+      openYears.add(month.slice(0, 4));
+      save(); render();
+    }
+
+    function closeSession(id) {
+      const session = sessionById(id);
+      if (!session) return;
+      session.closed = true;
+      save(); render();
+    }
+
+    function assignItem(kind) {
+      const session = currentSession();
+      if (!session) return;
+      const entry = entryOf(session, selectedMemberId);
+      if (!entry) return;
+      if (kind === "fine") {
+        const item = state.catalog.find((c) => c.id === document.getElementById("fineSelect")?.value);
+        if (!item) return;
+        entry.fines.unshift({ id: uid(), label: item.label, amount: item.amount });
+      } else {
+        const item = state.extras.find((c) => c.id === document.getElementById("extraSelect")?.value);
+        if (!item) return;
+        entry.extras.unshift({ id: uid(), label: item.label, amount: item.amount });
+      }
+      save(); render();
+    }
+
+    function removeLine(kind, memberId, lineId) {
+      const session = currentSession();
+      if (!session) return;
+      const entry = entryOf(session, memberId);
+      if (!entry) return;
+      entry[kind] = entry[kind].filter((item) => item.id !== lineId);
+      save(); render();
+    }
+
+    function togglePaid(memberId) {
+      const session = currentSession();
+      const entry = entryOf(session, memberId);
+      if (!entry) return;
+      entry.paid = !entry.paid;
+      entry.paidAt = entry.paid ? Date.now() : null;
+      save(); render();
+    }
+
+    function renderSessionSelect() {
+      const select = document.getElementById("sessionSelect");
+      const sessions = [...state.sessions].sort((a, b) => b.date.localeCompare(a.date));
+      select.innerHTML = sessions.map((s) => `
+        <option value="${s.id}" ${s.id === state.currentSessionId ? "selected" : ""}>
+          ${escapeHtml(s.label)}${s.closed ? " · abgeschlossen" : " · aktuell"}
+        </option>
+      `).join("");
+    }
+
+    function hintHtml(session) {
+      if (!session) return "";
+      const locked = isClosed(session);
+      return `<div class="banner">${locked
+        ? `<strong>${escapeHtml(session.label)}</strong> ist abgeschlossen – du kannst Beträge trotzdem nachtragen.`
+        : `Aktueller Abend: <strong>${escapeHtml(session.label)}</strong>. Das Lokal wird vorab vom Stammtischkonto bezahlt.`}</div>`;
+    }
+
+    function renderDrinks() {
+      const session = currentSession();
+      document.getElementById("sessionHint").innerHTML = hintHtml(session);
+      if (!state.members.length || !state.drinks.length) {
+        document.getElementById("drinkList").innerHTML = `<p class="empty">Mitglieder und Getränke unter Verwalten anlegen.</p>`;
+        return;
+      }
+      document.getElementById("drinkList").innerHTML = state.members.map((m) => {
+        const e = entryOf(session, m.id);
+        const b = breakdown(e);
+        const summary = state.drinks.map((d) => `${drinkCountOf(e, d.id)} ${d.name}`).join(" · ");
+        return `
+          <article class="member-card">
+            <div class="member-top">
+              <div class="avatar">${initials(m.name)}</div>
+              <div class="name-wrap">
+                <div class="member-name">${escapeHtml(m.name)}</div>
+                <div class="member-meta">${escapeHtml(summary)}</div>
+                <div class="member-meta">Getränke ${euro.format(b.drinks)} · davon Kasse ${euro.format(tillShare(e))}</div>
+              </div>
+            </div>
+            <div class="counters">
+              ${state.drinks.map((d) => counterHtml(m.id, d.id, d.name, drinkCountOf(e, d.id), `${euro.format(unitPrice(d))} (davon ${euro.format(d.share)} Kasse)`, "bump")).join("")}
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function counterHtml(memberId, itemId, label, value, meta, kind) {
+      return `
+        <div class="counter">
+          <div class="counter-label">${escapeHtml(label)}${meta ? " · " + meta : ""}</div>
+          <div class="stepper">
+            <button class="step" type="button" data-${kind}="${memberId}" data-item="${itemId}" data-delta="-1">−</button>
+            <div class="counter-value">${value}</div>
+            <button class="step plus" type="button" data-${kind}="${memberId}" data-item="${itemId}" data-delta="1">+</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderFines() {
+      const session = currentSession();
+      if (!state.members.length) {
+        document.getElementById("fineWho").innerHTML = "";
+        document.getElementById("fineAssign").innerHTML = `<p class="empty">Zuerst Mitglieder anlegen.</p>`;
+        document.getElementById("extraAssign").innerHTML = "";
+        document.getElementById("gameAssign").innerHTML = "";
+        document.getElementById("fineLedger").innerHTML = "";
+        return;
+      }
+      if (!selectedMemberId) selectedMemberId = state.members[0].id;
+      document.getElementById("fineWho").innerHTML = state.members.map((m) => `
+        <button class="chip ${m.id === selectedMemberId ? "on" : ""}" type="button" data-select="${m.id}">${escapeHtml(m.name)}</button>
+      `).join("");
+
+      document.getElementById("fineAssign").innerHTML = state.catalog.length ? `
+        <select id="fineSelect">${state.catalog.map((item) => `<option value="${item.id}">${escapeHtml(item.label)} · ${euro.format(item.amount)}</option>`).join("")}</select>
+        <button class="primary" type="button" id="assignFine">Strafe zuweisen</button>
+      ` : `<p class="empty">Strafen unter Verwalten anlegen.</p>`;
+
+      document.getElementById("extraAssign").innerHTML = state.extras.length ? `
+        <select id="extraSelect">${state.extras.map((item) => `<option value="${item.id}">${escapeHtml(item.label)} · ${euro.format(item.amount)}</option>`).join("")}</select>
+        <button class="primary" type="button" id="assignExtra">Sonderzahlung buchen</button>
+      ` : `<p class="empty">Sonderzahlungen unter Verwalten anlegen.</p>`;
+
+      const selected = entryOf(session, selectedMemberId);
+      document.getElementById("gameAssign").innerHTML = state.games.length
+        ? `<div class="counters">${state.games.map((g) => counterHtml(selectedMemberId, g.id, g.name, selected.games[g.id] || 0, `${euro.format(g.amount)} je Runde`, "game")).join("")}</div>`
+        : `<p class="empty">Tischspiele unter Verwalten anlegen.</p>`;
+
+      const ledger = state.members.map((m) => {
+        const e = entryOf(session, m.id);
+        const b = breakdown(e);
+        const lines = [
+          ...e.fines.map((item) => lineHtml(m.id, "fines", item)),
+          ...e.extras.map((item) => lineHtml(m.id, "extras", item))
+        ].join("");
+        return `
+          <div style="margin-bottom:18px">
+            ${lines || `<p class="empty" style="padding:8px 0;text-align:left">Keine Strafen/Sonderzahlungen.</p>`}
+            <div class="sum-row"><span>${escapeHtml(m.name)}</span><span>${euro.format(b.total)}</span></div>
+          </div>
+        `;
+      }).join("");
+      const tot = sessionTotals(session);
+      document.getElementById("fineLedger").innerHTML = `
+        ${ledger}
+        <button class="primary full" type="button" disabled>Abendkasse: ${euro.format(tot.total)}</button>
+      `;
+    }
+
+    function lineHtml(memberId, kind, item) {
+      return `
+        <div class="penalty-item">
+          <div>
+            <strong>${escapeHtml(item.label)}</strong>
+            <div class="member-meta">${kind === "fines" ? "Strafe" : "Sonderzahlung"}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <b>${euro.format(item.amount)}</b>
+            <button class="ghost" type="button" data-unline="${memberId}" data-kind="${kind}" data-line="${item.id}">✕</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderBeer() {
+      if (!state.members.length) {
+        document.getElementById("beerKing").innerHTML = `<p class="empty">Keine Mitglieder.</p>`;
+        document.getElementById("beerRanks").innerHTML = "";
+        return;
+      }
+      const ranked = [...state.members].sort((a, b) => yearBeer(b.id) - yearBeer(a.id) || a.name.localeCompare(b.name, "de"));
+      const king = ranked[0];
+      const kingBeers = yearBeer(king.id);
+      const totalBeers = ranked.reduce((sum, m) => sum + yearBeer(m.id), 0);
+      document.getElementById("beerKing").innerHTML = kingBeers > 0 ? `
+        <article class="rank-card king">
+          <div class="crown">👑</div>
+          <div>
+            <div class="kicker">Bierkönig ${new Date().getFullYear()}</div>
+            <div class="member-name">${escapeHtml(king.name)}</div>
+            <div class="member-meta">${kingBeers} Bier · ${totalBeers ? Math.round((kingBeers / totalBeers) * 100) : 0}% im Jahr</div>
+          </div>
+        </article>
+      ` : `<p class="empty">Noch kein Bier in diesem Jahr.</p>`;
+      document.getElementById("beerRanks").innerHTML = ranked.map((m, i) => {
+        const cls = i === 0 ? "gold" : i === 1 ? "silver" : i === 2 ? "bronze" : "";
+        return `
+          <article class="rank-card">
+            <div class="place ${cls}">${i + 1}</div>
+            <div>
+              <div class="member-name">${escapeHtml(m.name)}</div>
+              <div class="member-meta">${yearDrinks(m.id)} Getränke im Jahr</div>
+            </div>
+            <div class="rank-num">${yearBeer(m.id)}</div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderStats() {
+      const session = currentSession();
+      if (!session) return;
+      const tot = sessionTotals(session);
+      const openPrev = state.sessions
+        .filter((s) => s.id !== session.id)
+        .reduce((sum, s) => sum + sessionTotals(s).open, 0);
+      document.getElementById("settleIntro").innerHTML = `
+        <div class="banner">
+          <strong>${escapeHtml(session.label)}</strong><br>
+          Der Stammtisch hat die Rechnung vorab gezahlt. Jeder überweist seinen Betrag bis zum nächsten Stammtischbeginn auf das Stammtischkonto.
+          ${openPrev > 0 ? `<div class="warn" style="margin-top:8px">Offen aus älteren Monaten: ${euro.format(openPrev)}</div>` : ""}
+        </div>
+      `;
+      document.getElementById("highlights").innerHTML = `
+        <div class="stat-card"><small>Abendkasse gesamt</small><b>${euro.format(tot.total)}</b></div>
+        <div class="stat-card"><small>Noch nicht überwiesen</small><b>${euro.format(tot.open)}</b></div>
+        <div class="stat-card"><small>Getränke / Strafen / Sonder / Spiele</small>
+          <b>${euro.format(tot.drinks)} · ${euro.format(tot.fines)} · ${euro.format(tot.extras)} · ${euro.format(tot.games)}</b></div>
+      `;
+      document.getElementById("settleList").innerHTML = session.entries
+        .slice()
+        .sort((a, b) => (memberById(a.memberId)?.name || a.name).localeCompare(memberById(b.memberId)?.name || b.name, "de"))
+        .map((e) => {
+          const name = memberById(e.memberId)?.name || e.name;
+          const b = breakdown(e);
+          return `
+            <article class="member-card ${e.paid ? "paid-card" : ""}">
+              <div class="member-top">
+                <div class="avatar">${initials(name)}</div>
+                <div class="name-wrap">
+                  <div class="member-name">${escapeHtml(name)}</div>
+                  <div class="${e.paid ? "ok-text" : "debt"}">${e.paid ? "Überwiesen" : euro.format(b.total)}</div>
+                </div>
+              </div>
+              <div class="break-row"><span>Getränke</span><span>${euro.format(b.drinks)}</span></div>
+              <div class="break-row"><span>Strafen</span><span>${euro.format(b.fines)}</span></div>
+              <div class="break-row"><span>Sonderzahlungen</span><span>${euro.format(b.extras)}</span></div>
+              <div class="break-row"><span>Tischspiele</span><span>${euro.format(b.games)}</span></div>
+              <button class="primary ${e.paid ? "ghosted" : "ok"} full" type="button" data-paid="${e.memberId}">
+                ${e.paid ? "Überweisung zurücksetzen" : "Als überwiesen markieren"}
+              </button>
+            </article>
+          `;
+        }).join("");
+
+      renderPie("piePeople", "legendPeople", session.entries.map((e) => ({
+        label: memberById(e.memberId)?.name || e.name,
+        value: breakdown(e).total
+      })), "Noch keine Schulden.");
+      renderPie("pieKinds", "legendKinds", [
+        { label: "Getränke", value: tot.drinks },
+        { label: "Strafen", value: tot.fines },
+        { label: "Sonderzahlungen", value: tot.extras },
+        { label: "Tischspiele", value: tot.games }
+      ], "Noch keine Buchungen.");
+
+      document.getElementById("historyList").innerHTML = renderHistory();
+    }
+
+    function renderHistory() {
+      if (!state.sessions.length) return `<p class="empty">Noch keine Stammtische gespeichert.</p>`;
+      const byYear = {};
+      [...state.sessions].sort((a, b) => b.date.localeCompare(a.date)).forEach((s) => {
+        const year = s.month.slice(0, 4);
+        (byYear[year] ||= []).push(s);
+      });
+      return Object.keys(byYear).sort((a, b) => b.localeCompare(a)).map((year) => {
+        const months = byYear[year];
+        const yearTot = months.reduce((acc, s) => {
+          const t = sessionTotals(s);
+          acc.glasses += t.glasses;
+          acc.drinks += t.drinks;
+          acc.fines += t.fines;
+          acc.extras += t.extras;
+          acc.games += t.games;
+          acc.total += t.total;
+          return acc;
+        }, { glasses: 0, drinks: 0, fines: 0, extras: 0, games: 0, total: 0 });
+        const open = openYears.has(year);
+        return `
+          <div class="year-block">
+            <button class="year-head" type="button" data-toggle-year="${year}">
+              <div>
+                <div class="member-name">${year}</div>
+                <div class="member-meta">${months.length} Stammtisch${months.length === 1 ? "" : "e"} · ${yearTot.glasses} Getränke · ${euro.format(yearTot.total)}</div>
+              </div>
+              <span class="chev">${open ? "▾" : "▸"}</span>
+            </button>
+            ${open ? `
+              <div class="year-sum member-meta" style="padding:10px 16px">
+                Jahr ${year}: Getränke ${euro.format(yearTot.drinks)} · Strafen ${euro.format(yearTot.fines)} · Sonder ${euro.format(yearTot.extras)} · Spiele ${euro.format(yearTot.games)}
+              </div>
+              ${months.map((s) => {
+                const t = sessionTotals(s);
+                const on = s.id === state.currentSessionId;
+                return `
+                  <button class="month-compact ${on ? "on" : ""}" type="button" data-open-session="${s.id}">
+                    <div class="member-name">${escapeHtml(s.label)}${s.closed ? "" : " · aktuell"}</div>
+                    <div class="nums"><span>${t.glasses} Getränke</span><span>${euro.format(t.total)}</span></div>
+                    <div class="member-meta">Getränke ${euro.format(t.drinks)} · Strafen ${euro.format(t.fines)} · Sonder ${euro.format(t.extras)} · Spiele ${euro.format(t.games)}</div>
+                  </button>
+                `;
+              }).join("")}
+            ` : ""}
+          </div>
+        `;
+      }).join("");
+    }
+
+    function catalogList(items, nameKey, amountKey, editAttr, removeAttr, extra) {
+      if (!items.length) return `<p class="empty">Noch keine Einträge.</p>`;
+      return items.map((item) => `
+        <div class="admin-card admin-row">
+          <div>
+            <div class="member-name">${escapeHtml(item[nameKey])}</div>
+            <div class="member-meta">${euro.format(item[amountKey])}${extra ? extra(item) : ""}</div>
+          </div>
+          <div class="admin-actions">
+            <button class="tiny" type="button" data-${editAttr}="${item.id}">Ändern</button>
+            <button class="tiny danger" type="button" data-${removeAttr}="${item.id}">Löschen</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function renderAdmin() {
+      document.getElementById("sessionDate").value = currentSession()?.date || todayISO();
+      document.getElementById("sessionAdmin").innerHTML = [...state.sessions].sort((a, b) => b.date.localeCompare(a.date)).map((s) => {
+        const t = sessionTotals(s);
+        return `
+          <div class="admin-card admin-row">
+            <div>
+              <div class="member-name">${escapeHtml(s.label)}</div>
+              <div class="member-meta">${s.closed ? "abgeschlossen" : "offen"} · ${euro.format(t.total)} · ${euro.format(t.open)} offen</div>
+            </div>
+            ${s.closed ? "" : `<button class="tiny" type="button" data-close-session="${s.id}">Abschließen</button>`}
+          </div>
+        `;
+      }).join("");
+
+      document.getElementById("memberAdmin").innerHTML = state.members.length
+        ? state.members.map((m) => `
+            <div class="admin-card admin-row">
+              <div>
+                <div class="member-name">${escapeHtml(m.name)}</div>
+                <div class="member-meta">${yearDrinks(m.id)} Getränke im Jahr</div>
+              </div>
+              <button class="tiny danger" type="button" data-remove-member="${m.id}">Löschen</button>
+            </div>
+          `).join("")
+        : `<p class="empty">Noch keine Mitglieder.</p>`;
+
+      document.getElementById("drinkAdmin").innerHTML = state.drinks.length
+        ? state.drinks.map((d) => `
+            <div class="admin-card admin-row">
+              <div>
+                <div class="member-name">${escapeHtml(d.name)}</div>
+                <div class="member-meta">Einkauf ${euro.format(d.buy)} · Kasse +${euro.format(d.share)}${d.forKing ? " · Bierkönig" : ""}</div>
+              </div>
+              <div class="admin-actions">
+                <button class="tiny" type="button" data-edit-drink="${d.id}">Ändern</button>
+                <button class="tiny danger" type="button" data-remove-drink="${d.id}">Löschen</button>
+              </div>
+            </div>
+          `).join("")
+        : `<p class="empty">Noch keine Getränkearten.</p>`;
+
+      document.getElementById("fineAdmin").innerHTML = catalogList(state.catalog, "label", "amount", "edit-fine", "remove-fine-def");
+      document.getElementById("extraAdmin").innerHTML = catalogList(state.extras, "label", "amount", "edit-extra", "remove-extra-def");
+      document.getElementById("gameAdmin").innerHTML = catalogList(state.games, "name", "amount", "edit-game", "remove-game-def", () => " je Runde");
+    }
+
+    function renderPie(pieId, legendId, slices, emptyText) {
+      const pieEl = document.getElementById(pieId);
+      const legendEl = document.getElementById(legendId);
+      const active = slices.filter((slice) => slice.value > 0);
+      const total = active.reduce((sum, s) => sum + s.value, 0);
+      if (total <= 0) {
+        pieEl.innerHTML = `<p class="empty">${emptyText}</p>`;
+        legendEl.innerHTML = "";
+        return;
+      }
+      const pcts = wholePercents(active.map((s) => s.value));
+      let angle = -Math.PI / 2;
+      const paths = active.map((slice, i) => {
+        const share = slice.value / total;
+        const next = angle + share * Math.PI * 2;
+        const path = arcPath(100, 100, 80, angle, next, share >= 0.999);
+        angle = next;
+        return `<path d="${path}" fill="${COLORS[i % COLORS.length]}"></path>`;
+      }).join("");
+      pieEl.innerHTML = `
+        <svg class="pie" viewBox="0 0 200 200" role="img" aria-label="Tortendiagramm">
+          ${paths}
+          <circle cx="100" cy="100" r="44" fill="#0b0b0d"></circle>
+          <text x="100" y="96" text-anchor="middle" fill="#f6f1e6" font-size="13" font-weight="700">Anteil</text>
+          <text x="100" y="114" text-anchor="middle" fill="#e8c478" font-size="12">100%</text>
+        </svg>`;
+      legendEl.innerHTML = active.map((slice, i) => `
+        <div class="legend-row">
+          <i class="swatch" style="background:${COLORS[i % COLORS.length]}"></i>
+          <span>${escapeHtml(slice.label)}</span>
+          <span>${pcts[i]}%</span>
+        </div>`).join("");
+    }
+    function wholePercents(values) {
+      const total = values.reduce((sum, v) => sum + v, 0);
+      const raw = values.map((v) => (v / total) * 100);
+      const floored = raw.map(Math.floor);
+      let rest = 100 - floored.reduce((sum, v) => sum + v, 0);
+      const order = raw.map((v, i) => ({ i, frac: v - Math.floor(v) })).sort((a, b) => b.frac - a.frac);
+      for (let n = 0; n < rest; n += 1) floored[order[n].i] += 1;
+      return floored;
+    }
+    function arcPath(cx, cy, r, start, end, full) {
+      if (full) return `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`;
+      const x1 = cx + r * Math.cos(start), y1 = cy + r * Math.sin(start);
+      const x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
+      const large = end - start > Math.PI ? 1 : 0;
+      return `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+    }
+
+    function render() {
+      renderSessionSelect();
+      renderDrinks();
+      renderFines();
+      renderBeer();
+      renderStats();
+      renderAdmin();
+    }
+
+    document.getElementById("sessionSelect").addEventListener("change", (event) => {
+      state.currentSessionId = event.target.value;
+      save(); render();
+    });
+
+    document.body.addEventListener("click", (event) => {
+      const tab = event.target.closest(".tab");
+      if (tab) {
+        const key = tab.dataset.tab;
+        document.querySelectorAll(".tab").forEach((el) => el.classList.toggle("on", el === tab));
+        document.querySelectorAll(".panel").forEach((el) => {
+          const on = el.id === `panel-${key}`;
+          el.classList.toggle("active", on);
+          el.hidden = !on;
+        });
+        document.getElementById("title").textContent = titles[key][0];
+        document.getElementById("subtitle").textContent = titles[key][1];
+        return;
+      }
+      const bumpBtn = event.target.closest("[data-bump]");
+      if (bumpBtn) { bump(bumpBtn.dataset.bump, bumpBtn.dataset.item, Number(bumpBtn.dataset.delta)); return; }
+      const gameBtn = event.target.closest("[data-game]");
+      if (gameBtn) { bumpGame(gameBtn.dataset.game, gameBtn.dataset.item, Number(gameBtn.dataset.delta)); return; }
+      const selectBtn = event.target.closest("[data-select]");
+      if (selectBtn) { selectedMemberId = selectBtn.dataset.select; render(); return; }
+      const paidBtn = event.target.closest("[data-paid]");
+      if (paidBtn) { togglePaid(paidBtn.dataset.paid); return; }
+      const yearBtn = event.target.closest("[data-toggle-year]");
+      if (yearBtn) {
+        const year = yearBtn.dataset.toggleYear;
+        if (openYears.has(year)) openYears.delete(year);
+        else openYears.add(year);
+        render();
+        return;
+      }
+      const openS = event.target.closest("[data-open-session]");
+      if (openS) { state.currentSessionId = openS.dataset.openSession; save(); render(); return; }
+      const closeS = event.target.closest("[data-close-session]");
+      if (closeS) { closeSession(closeS.dataset.closeSession); return; }
+      const unline = event.target.closest("[data-unline]");
+      if (unline) { removeLine(unline.dataset.kind, unline.dataset.unline, unline.dataset.line); return; }
+      if (event.target.closest("#assignFine")) { assignItem("fine"); return; }
+      if (event.target.closest("#assignExtra")) { assignItem("extra"); return; }
+      if (event.target.closest("#addMember")) { addMember(); return; }
+      if (event.target.closest("#startSession")) { startOrOpenSession(); return; }
+      if (event.target.closest("#saveDrink")) { saveNamed("drink"); return; }
+      if (event.target.closest("#cancelDrink")) { resetDrinkForm(); return; }
+      if (event.target.closest("#saveFineDef")) { saveNamed("fine"); return; }
+      if (event.target.closest("#cancelFineDef")) { resetFineForm(); return; }
+      if (event.target.closest("#saveExtraDef")) { saveNamed("extra"); return; }
+      if (event.target.closest("#cancelExtraDef")) { resetExtraForm(); return; }
+      if (event.target.closest("#saveGameDef")) { saveNamed("game"); return; }
+      if (event.target.closest("#cancelGameDef")) { resetGameForm(); return; }
+      const editDrink = event.target.closest("[data-edit-drink]");
+      if (editDrink) {
+        const d = drinkById(editDrink.dataset.editDrink);
+        editing.drink = d.id;
+        document.getElementById("drinkName").value = d.name;
+        document.getElementById("drinkBuy").value = String(d.buy);
+        document.getElementById("drinkShare").value = String(d.share);
+        document.getElementById("drinkKing").checked = d.forKing;
+        document.getElementById("saveDrink").textContent = "Änderung speichern";
+        document.getElementById("cancelDrink").hidden = false;
+        return;
+      }
+      const removeDrink = event.target.closest("[data-remove-drink]");
+      if (removeDrink && confirm("Getränkeart löschen?")) {
+        state.drinks = state.drinks.filter((d) => d.id !== removeDrink.dataset.removeDrink);
+        save(); render(); return;
+      }
+      const editFine = event.target.closest("[data-edit-fine]");
+      if (editFine) {
+        const item = state.catalog.find((c) => c.id === editFine.dataset.editFine);
+        editing.fine = item.id;
+        document.getElementById("fineName").value = item.label;
+        document.getElementById("fineAmount").value = String(item.amount);
+        document.getElementById("saveFineDef").textContent = "Änderung speichern";
+        document.getElementById("cancelFineDef").hidden = false;
+        return;
+      }
+      const removeFine = event.target.closest("[data-remove-fine-def]");
+      if (removeFine && confirm("Strafe löschen?")) {
+        state.catalog = state.catalog.filter((c) => c.id !== removeFine.dataset.removeFineDef);
+        save(); render(); return;
+      }
+      const editExtra = event.target.closest("[data-edit-extra]");
+      if (editExtra) {
+        const item = state.extras.find((c) => c.id === editExtra.dataset.editExtra);
+        editing.extra = item.id;
+        document.getElementById("extraName").value = item.label;
+        document.getElementById("extraAmount").value = String(item.amount);
+        document.getElementById("saveExtraDef").textContent = "Änderung speichern";
+        document.getElementById("cancelExtraDef").hidden = false;
+        return;
+      }
+      const removeExtra = event.target.closest("[data-remove-extra-def]");
+      if (removeExtra && confirm("Sonderzahlung löschen?")) {
+        state.extras = state.extras.filter((c) => c.id !== removeExtra.dataset.removeExtraDef);
+        save(); render(); return;
+      }
+      const editGame = event.target.closest("[data-edit-game]");
+      if (editGame) {
+        const item = gameById(editGame.dataset.editGame);
+        editing.game = item.id;
+        document.getElementById("gameName").value = item.name;
+        document.getElementById("gameAmount").value = String(item.amount);
+        document.getElementById("saveGameDef").textContent = "Änderung speichern";
+        document.getElementById("cancelGameDef").hidden = false;
+        return;
+      }
+      const removeGame = event.target.closest("[data-remove-game-def]");
+      if (removeGame && confirm("Tischspiel löschen?")) {
+        state.games = state.games.filter((g) => g.id !== removeGame.dataset.removeGameDef);
+        save(); render(); return;
+      }
+      const removeMemberBtn = event.target.closest("[data-remove-member]");
+      if (removeMemberBtn) removeMember(removeMemberBtn.dataset.removeMember);
+    });
+
+    document.getElementById("newMember").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") addMember();
+    });
+
+    render();
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
