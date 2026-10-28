@@ -97,6 +97,7 @@
     .step:disabled, .primary:disabled { opacity: 0.4; }
     .step:active { transform: scale(0.96); }
     .add-row, .form-grid { display: grid; gap: 8px; }
+    .form-grid[hidden] { display: none !important; }
     .add-row.inline { grid-template-columns: 1fr auto; }
     input, select {
       width: 100%; min-height: 54px; border-radius: 16px; border: 1px solid var(--line);
@@ -292,11 +293,65 @@
       color: var(--text);
       font-size: 1.4rem;
     }
+    body.locked {
+      padding-bottom: 0;
+    }
+    body.locked .app-header,
+    body.locked main,
+    body.locked nav.tabs,
+    body.locked .photo-lightbox {
+      display: none !important;
+    }
+    .gate {
+      min-height: 100dvh;
+      padding: calc(28px + var(--safe-t)) 20px 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 14px;
+    }
+    .gate[hidden] { display: none !important; }
+    .gate h1 { font-size: 2rem; }
+    .pin-error { color: var(--danger); min-height: 1.2em; font-size: 0.9rem; }
+    .header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
   </style>
 </head>
-<body>
+<body class="locked">
+  <div id="gate" class="gate">
+    <p class="kicker">BroZZers</p>
+    <h1 id="gateTitle">Nur für Mitglieder</h1>
+    <p class="sub" id="gateSub">Zugangscode eingeben, den ihr intern vereinbart.</p>
+    <div id="gateLogin" class="form-grid" hidden>
+      <div class="field">
+        <label for="gatePin">Zugangscode</label>
+        <input id="gatePin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="4–8 Ziffern" />
+      </div>
+      <button class="primary full" type="button" id="unlockBtn">Eintreten</button>
+    </div>
+    <div id="gateSetup" class="form-grid" hidden>
+      <div class="field">
+        <label for="setupPin">Neuen Code festlegen</label>
+        <input id="setupPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="4–8 Ziffern" />
+      </div>
+      <div class="field">
+        <label for="setupPin2">Code wiederholen</label>
+        <input id="setupPin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" />
+      </div>
+      <button class="primary full" type="button" id="setupBtn">Code speichern und eintreten</button>
+    </div>
+    <p class="pin-error" id="gateError"></p>
+  </div>
+
   <header class="app-header">
-    <p class="kicker">Stammtisch <span id="syncBadge" class="sync-badge">Cloud…</span></p>
+    <div class="header-row">
+      <p class="kicker">Stammtisch <span id="syncBadge" class="sync-badge">Cloud…</span></p>
+      <button class="tiny" type="button" id="lockApp">Sperren</button>
+    </div>
     <h1 id="title">Getränke</h1>
     <p class="sub" id="subtitle">Zähler für den gewählten Stammtisch-Abend.</p>
     <select id="sessionSelect" aria-label="Stammtisch-Monat" style="margin-top:12px"></select>
@@ -470,6 +525,26 @@
           <div class="banner" id="cloudInfo">Verbinde…</div>
           <button class="primary full" type="button" id="forceSync">Jetzt synchronisieren</button>
         </div>
+        <div class="admin-block">
+          <h2 class="section-title">Mitglieder-Zugang</h2>
+          <p class="member-meta" style="margin-bottom:10px">Gemeinsamer Zahlencode. Nur wer ihn kennt, kommt in die App. In Verwalten jederzeit ändern.</p>
+          <div class="banner" id="gateInfo">Kein Code gesetzt.</div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="oldPin">Aktueller Code</label>
+              <input id="oldPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" />
+            </div>
+            <div class="field">
+              <label for="newPin">Neuer Code</label>
+              <input id="newPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" placeholder="4–8 Ziffern" />
+            </div>
+            <div class="field">
+              <label for="newPin2">Neuen Code wiederholen</label>
+              <input id="newPin2" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off" />
+            </div>
+            <button class="primary" type="button" id="savePin">Zugangscode speichern</button>
+          </div>
+        </div>
       </div>
     </section>
   </main>
@@ -501,6 +576,7 @@
     const PHOTO_DB = "stammtisch-photos-v1";
     const MAX_PHOTOS = 12;
     const MAX_PHOTO_EDGE = 960;
+    const GATE_KEY = "stammtisch-gate-v1";
 
     let state = defaultState();
     let selectedMemberId = null;
@@ -514,8 +590,107 @@
     let saveTimer = null;
     let lastPullAt = 0;
     let lastCloudFailAt = 0;
+    let unlocked = false;
 
     function uid() { return Math.random().toString(36).slice(2, 9); }
+    function normalizePin(value) {
+      return String(value || "").replace(/\D/g, "");
+    }
+    function pinOk(pin) {
+      return pin.length >= 4 && pin.length <= 8;
+    }
+    async function hashPin(pin) {
+      const bytes = new TextEncoder().encode("brozzers-gate|" + pin);
+      const buf = await crypto.subtle.digest("SHA-256", bytes);
+      return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+    }
+    function rememberGate(hash) {
+      try { localStorage.setItem(GATE_KEY, hash); } catch (_) {}
+    }
+    function forgetGate() {
+      try { localStorage.removeItem(GATE_KEY); } catch (_) {}
+    }
+    function rememberedHash() {
+      try { return localStorage.getItem(GATE_KEY) || ""; } catch (_) { return ""; }
+    }
+    function showGateError(text) {
+      const el = document.getElementById("gateError");
+      if (el) el.textContent = text || "";
+    }
+    function setUnlocked(on) {
+      unlocked = on;
+      document.body.classList.toggle("locked", !on);
+      document.getElementById("gate").hidden = on;
+      if (on) showGateError("");
+    }
+    function paintGate(mode) {
+      const setup = mode === "setup";
+      document.getElementById("gateSetup").hidden = !setup;
+      document.getElementById("gateLogin").hidden = setup;
+      document.getElementById("gateTitle").textContent = setup ? "Zugang einrichten" : "Nur für Mitglieder";
+      document.getElementById("gateSub").textContent = setup
+        ? "Legt jetzt einen Zahlencode fest und gebt ihn nur intern weiter."
+        : "Zugangscode eingeben, den ihr intern vereinbart.";
+    }
+    function applyGate() {
+      if (!state.accessHash) {
+        paintGate("setup");
+        setUnlocked(false);
+        return;
+      }
+      if (rememberedHash() === state.accessHash) {
+        setUnlocked(true);
+        return;
+      }
+      paintGate("login");
+      setUnlocked(false);
+    }
+    async function setupAccess() {
+      const pin = normalizePin(document.getElementById("setupPin").value);
+      const pin2 = normalizePin(document.getElementById("setupPin2").value);
+      if (!pinOk(pin)) { showGateError("Bitte 4 bis 8 Ziffern."); return; }
+      if (pin !== pin2) { showGateError("Die Codes stimmen nicht überein."); return; }
+      state.accessHash = await hashPin(pin);
+      rememberGate(state.accessHash);
+      save();
+      setUnlocked(true);
+      render();
+    }
+    async function unlockAccess() {
+      const pin = normalizePin(document.getElementById("gatePin").value);
+      if (!state.accessHash) { paintGate("setup"); return; }
+      if (!pinOk(pin)) { showGateError("Bitte 4 bis 8 Ziffern."); return; }
+      const hash = await hashPin(pin);
+      if (hash !== state.accessHash) { showGateError("Falscher Code."); return; }
+      rememberGate(hash);
+      document.getElementById("gatePin").value = "";
+      setUnlocked(true);
+    }
+    function lockAccess() {
+      forgetGate();
+      document.getElementById("gatePin").value = "";
+      applyGate();
+    }
+    async function changeAccess() {
+      const oldPin = normalizePin(document.getElementById("oldPin").value);
+      const pin = normalizePin(document.getElementById("newPin").value);
+      const pin2 = normalizePin(document.getElementById("newPin2").value);
+      if (state.accessHash) {
+        if (!pinOk(oldPin) || await hashPin(oldPin) !== state.accessHash) {
+          alert("Aktueller Code ist falsch.");
+          return;
+        }
+      }
+      if (!pinOk(pin)) { alert("Neuer Code: 4 bis 8 Ziffern."); return; }
+      if (pin !== pin2) { alert("Die neuen Codes stimmen nicht überein."); return; }
+      state.accessHash = await hashPin(pin);
+      rememberGate(state.accessHash);
+      document.getElementById("oldPin").value = "";
+      document.getElementById("newPin").value = "";
+      document.getElementById("newPin2").value = "";
+      save();
+      render();
+    }
     function todayISO() { return new Date().toISOString().slice(0, 10); }
     function monthKey(date) { return String(date).slice(0, 7); }
     function monthLabel(date) {
@@ -603,6 +778,7 @@
           });
         });
         if (!raw.currentSessionId) raw.currentSessionId = raw.sessions[raw.sessions.length - 1]?.id;
+        if (raw.accessHash) raw.accessHash = String(raw.accessHash);
         return raw;
       }
       const drinks = raw.drinks?.length ? raw.drinks : defaultDrinks();
@@ -811,6 +987,7 @@
         await hydratePhotos();
         persistLocal();
         render();
+        applyGate();
         setCloudStatus("ok", "Live – Stand von anderem Gerät übernommen.");
       } catch (err) {
         lastCloudFailAt = Date.now();
@@ -839,7 +1016,9 @@
           (stateWeight(remote) > stateWeight(local) ||
             (stateWeight(remote) >= stateWeight(local) && Number(remote.updatedAt || 0) >= Number(local.updatedAt || 0)));
         if (takeRemote) {
+          const localHash = local.accessHash;
           state = migrate(remote);
+          if (localHash && !state.accessHash) state.accessHash = localHash;
           setCloudStatus("ok", "Live aus der Cloud geladen.");
         } else {
           state = local;
@@ -856,6 +1035,7 @@
       await hydratePhotos();
       persistLocal();
       render();
+      applyGate();
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) syncCloud();
       });
@@ -1549,6 +1729,12 @@
       document.getElementById("fineAdmin").innerHTML = catalogList(state.catalog, "label", "amount", "edit-fine", "remove-fine-def");
       document.getElementById("extraAdmin").innerHTML = catalogList(state.extras, "label", "amount", "edit-extra", "remove-extra-def");
       document.getElementById("gameAdmin").innerHTML = catalogList(state.games, "name", "amount", "edit-game", "remove-game-def", () => " je Runde");
+      const gateInfo = document.getElementById("gateInfo");
+      if (gateInfo) {
+        gateInfo.innerHTML = state.accessHash
+          ? "Zugang ist aktiv. Mitglieder brauchen den gemeinsamen Zahlencode."
+          : "Noch kein Code – beim ersten Öffnen oder hier festlegen.";
+      }
     }
 
     function renderPie(pieId, legendId, slices, emptyText) {
@@ -1681,6 +1867,10 @@
       }
       if (event.target.closest("#addMember")) { addMember(); return; }
       if (event.target.closest("#startSession")) { startOrOpenSession(); return; }
+      if (event.target.closest("#unlockBtn")) { unlockAccess(); return; }
+      if (event.target.closest("#setupBtn")) { setupAccess(); return; }
+      if (event.target.closest("#lockApp")) { lockAccess(); return; }
+      if (event.target.closest("#savePin")) { changeAccess(); return; }
       if (event.target.closest("#forceSync")) {
         lastCloudFailAt = 0;
         dirty = true;
@@ -1770,6 +1960,16 @@
 
     document.getElementById("newMember").addEventListener("keydown", (event) => {
       if (event.key === "Enter") addMember();
+    });
+    ["gatePin"].forEach((id) => {
+      document.getElementById(id).addEventListener("keydown", (event) => {
+        if (event.key === "Enter") unlockAccess();
+      });
+    });
+    ["setupPin", "setupPin2"].forEach((id) => {
+      document.getElementById(id).addEventListener("keydown", (event) => {
+        if (event.key === "Enter") setupAccess();
+      });
     });
 
     boot();
