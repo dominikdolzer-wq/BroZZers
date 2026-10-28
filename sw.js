@@ -1,4 +1,4 @@
-const CACHE = "stammtisch-pwa-v15";
+const CACHE = "stammtisch-pwa-v16";
 const ASSETS = [
   "./",
   "./index.html",
@@ -38,13 +38,9 @@ self.addEventListener("fetch", (event) => {
 
   if (isAppShell) {
     event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(event.request, copy));
-          return response;
-        })
-        .catch(() => caches.match(event.request).then((cached) => cached || caches.match("./index.html")))
+      fetch(event.request, { cache: "no-store" }).catch(() =>
+        caches.match(event.request).then((cached) => cached || caches.match("./index.html"))
+      )
     );
     return;
   }
