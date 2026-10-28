@@ -412,7 +412,7 @@
   <script>
     const STORAGE_KEY = "stammtisch-v3";
     const LEGACY_KEYS = ["stammtisch-v2", "stammtisch-v1"];
-    const CLOUD_URL = "https://crudcrud.com/api/ab5c34af450a408394fa69e537a8d574/stammtisch/6ae2638e4e731703e86b76f9";
+    const CLOUD_URL = "https://api.npoint.io/550b604d3ab7190111c0";
     const COLORS = ["#e8c478", "#d9923b", "#f0d9a0", "#c07a4a", "#8fbf7a", "#7aa7c7", "#e07a5f", "#c9a0dc"];
     const euro = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
     const monthFmt = new Intl.DateTimeFormat("de-DE", { month: "long", year: "numeric" });
@@ -434,6 +434,8 @@
     let pushQueued = false;
     let dirty = false;
     let saveTimer = null;
+    let lastPullAt = 0;
+    let lastCloudFailAt = 0;
 
     function uid() { return Math.random().toString(36).slice(2, 9); }
     function todayISO() { return new Date().toISOString().slice(0, 10); }
@@ -554,7 +556,7 @@
       dirty = true;
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
       clearTimeout(saveTimer);
-      saveTimer = setTimeout(pushCloud, 450);
+      saveTimer = setTimeout(pushCloud, 1800);
       setCloudStatus("wait", "Speichere in die Cloud…");
     }
 
@@ -569,12 +571,27 @@
       return !!(doc && Array.isArray(doc.members) && doc.members.length && Array.isArray(doc.sessions));
     }
 
+    function stateWeight(doc) {
+      if (!remoteLooksValid(doc)) return 0;
+      const extra = JSON.stringify(doc.sessions || []).length;
+      return (doc.members.length * 100) + ((doc.sessions || []).length * 10) + Math.min(extra, 999);
+    }
+
+    function cloudErrorMessage(res, text, verb) {
+      if (res.status === 400 && /exceeded|allowed number/i.test(text || "")) {
+        return "Cloud-Tageslimit erreicht – bitte die Seite später neu laden.";
+      }
+      return verb + " " + res.status;
+    }
+
     async function pullCloud() {
-      const res = await fetch(CLOUD_URL, { cache: "no-store" });
-      if (!res.ok) throw new Error("Lesen " + res.status);
-      const doc = await res.json();
+      const res = await fetch(CLOUD_URL + "?t=" + Date.now(), { cache: "no-store" });
+      const text = await res.text();
+      if (!res.ok) throw new Error(cloudErrorMessage(res, text, "Lesen"));
+      const doc = text ? JSON.parse(text) : null;
       if (!doc || typeof doc !== "object") return null;
       delete doc._id;
+      lastPullAt = Date.now();
       return doc;
     }
 
@@ -587,16 +604,19 @@
       try {
         const body = JSON.stringify(cloudPayload());
         const res = await fetch(CLOUD_URL, {
-          method: "PUT",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
           body
         });
-        if (!res.ok) throw new Error("Schreiben " + res.status);
+        const text = await res.text();
+        if (!res.ok) throw new Error(cloudErrorMessage(res, text, "Schreiben"));
         dirty = false;
+        lastCloudFailAt = 0;
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
         setCloudStatus("ok", "Live – alle sehen denselben Stand.");
       } catch (err) {
+        lastCloudFailAt = Date.now();
         setCloudStatus("err", "Cloud-Fehler: " + (err && err.message ? err.message : "unbekannt"));
       } finally {
         pushing = false;
@@ -607,21 +627,28 @@
       }
     }
 
-    async function syncCloud() {
+    async function syncCloud(force) {
+      if (!force && lastCloudFailAt && Date.now() - lastCloudFailAt < 30000) return;
       if (dirty) {
         await pushCloud();
         return;
       }
       if (pushing) return;
+      if (!force && lastPullAt && Date.now() - lastPullAt < 8000) return;
       try {
         const remote = await pullCloud();
         if (!remoteLooksValid(remote)) {
           setCloudStatus("ok", "Live – alle sehen denselben Stand.");
           return;
         }
+        if (stateWeight(state) > stateWeight(remote) && Number(state.updatedAt || 0) >= Number(remote.updatedAt || 0)) {
+          dirty = true;
+          await pushCloud();
+          return;
+        }
         const remoteAt = Number(remote.updatedAt || 0);
         const localAt = Number(state.updatedAt || 0);
-        if (remoteAt <= localAt) {
+        if (remoteAt <= localAt && stateWeight(remote) <= stateWeight(state)) {
           setCloudStatus("ok", "Live – alle sehen denselben Stand.");
           return;
         }
@@ -633,6 +660,7 @@
         render();
         setCloudStatus("ok", "Live – Stand von anderem Gerät übernommen.");
       } catch (err) {
+        lastCloudFailAt = Date.now();
         setCloudStatus("err", "Cloud-Abgleich fehlgeschlagen: " + (err && err.message ? err.message : ""));
       }
     }
@@ -651,9 +679,13 @@
 
     async function boot() {
       const local = load();
+      if (!local.updatedAt) local.updatedAt = Date.now();
       try {
         const remote = await pullCloud();
-        if (remoteLooksValid(remote)) {
+        const takeRemote = remoteLooksValid(remote) &&
+          (stateWeight(remote) > stateWeight(local) ||
+            (stateWeight(remote) >= stateWeight(local) && Number(remote.updatedAt || 0) >= Number(local.updatedAt || 0)));
+        if (takeRemote) {
           state = migrate(remote);
           setCloudStatus("ok", "Live aus der Cloud geladen.");
         } else {
@@ -664,16 +696,16 @@
         }
       } catch (err) {
         state = local;
+        lastCloudFailAt = Date.now();
         setCloudStatus("err", "Cloud nicht erreichbar – Offline-Stand. " + (err && err.message ? err.message : ""));
       }
       selectedMemberId = state.members[0]?.id || null;
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
       render();
-      setInterval(syncCloud, 2500);
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) syncCloud();
       });
-      window.addEventListener("online", () => syncCloud());
+      window.addEventListener("online", () => syncCloud(true));
     }
 
     function parseMoney(value) {
@@ -1384,9 +1416,10 @@
       if (event.target.closest("#addMember")) { addMember(); return; }
       if (event.target.closest("#startSession")) { startOrOpenSession(); return; }
       if (event.target.closest("#forceSync")) {
+        lastCloudFailAt = 0;
         dirty = true;
         state.updatedAt = Date.now();
-        pushCloud().then(() => syncCloud());
+        pushCloud().then(() => syncCloud(true));
         return;
       }
       if (event.target.closest("#saveDrink")) { saveNamed("drink"); return; }
