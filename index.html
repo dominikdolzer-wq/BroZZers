@@ -346,7 +346,7 @@
     .event-card.next { border-color: rgba(232, 196, 120, 0.45); background: linear-gradient(135deg, rgba(232,196,120,0.16), rgba(217,146,59,0.06)); }
     .event-card.past { opacity: 0.78; }
     .music-bar {
-      margin-top: 12px;
+      margin: 0 0 14px;
       display: flex;
       align-items: center;
       gap: 10px;
@@ -434,14 +434,6 @@
     <h1 id="title">Events</h1>
     <p class="sub" id="subtitle">Termine mit Datum und Standort, für alle sichtbar.</p>
     <select id="sessionSelect" aria-label="Stammtisch-Monat" style="margin-top:12px" hidden></select>
-    <div class="music-bar">
-      <div class="yt" id="ytHost"></div>
-      <div class="music-meta">
-        <strong>Fortunate Son</strong>
-        <span>CCR · offizieller Clip</span>
-      </div>
-      <button class="tiny" type="button" id="musicToggle" aria-label="Musik">▶</button>
-    </div>
   </header>
 
   <main>
@@ -472,6 +464,14 @@
     </section>
 
     <section id="panel-events" class="panel active">
+      <div class="music-bar">
+        <div class="yt" id="ytHost"></div>
+        <div class="music-meta">
+          <strong>Fortunate Son</strong>
+          <span>CCR · Stammtischsong</span>
+        </div>
+        <button class="tiny" type="button" id="musicToggle" aria-label="Musik">▶</button>
+      </div>
       <div id="eventList"></div>
     </section>
 
@@ -869,6 +869,8 @@
       document.getElementById("title").textContent = titles[key][0];
       document.getElementById("subtitle").textContent = titles[key][1];
       document.getElementById("sessionSelect").hidden = key === "events";
+      if (key === "events") loadMusicApi();
+      else pauseMusic();
     }
     function wipePlainStorage() {
       try {
@@ -885,7 +887,7 @@
       try { render(); } catch (_) {}
       persistLocal();
       hydratePhotos().then(() => { if (unlocked) renderPhotos(); }).catch(() => {});
-      try { loadMusicApi(); playMusic(); } catch (_) {}
+      try { loadMusicApi(); } catch (_) {}
     }
     async function setupAccess() {
       const pin = document.getElementById("setupPin").value;
@@ -1389,7 +1391,6 @@
         setCloudStatus("err", "Cloud nicht erreichbar. " + (err && err.message ? err.message : ""));
         paintGate("login");
       }
-      loadMusicApi();
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) syncCloud();
       });
@@ -2486,7 +2487,7 @@
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js?v=18", { updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
+        navigator.serviceWorker.register("./sw.js?v=19", { updateViaCache: "none" }).then((reg) => reg.update()).catch(() => {});
       });
     }
   </script>
